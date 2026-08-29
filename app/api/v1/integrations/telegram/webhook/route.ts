@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { query } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
 import { maybeAutoReply } from "@/lib/assistant";
@@ -6,6 +6,7 @@ import { recordMessage, recordPollVote, upsertThread } from "@/lib/chat";
 import { type TelegramUpdate, getTelegramConfig, parseLinkCode, sendTelegramMessage } from "@/lib/telegram";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 interface Update extends TelegramUpdate {
   poll_answer?: { poll_id?: string; user?: { id?: number; username?: string }; option_ids?: number[] };
@@ -63,7 +64,12 @@ export async function POST(request: Request) {
 
   const code = parseLinkCode(message.text);
   if (!code) {
-    if (saved && message.text) void maybeAutoReply(threadId, message.text);
+    // Run the AI reply after the 200 so Telegram doesn't wait on Gemini, but
+    // keep the function alive until it finishes (bare `void` gets frozen).
+    if (saved && message.text) {
+      const t = message.text;
+      after(() => maybeAutoReply(threadId, t));
+    }
     return ok();
   }
 

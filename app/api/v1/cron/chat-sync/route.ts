@@ -16,7 +16,7 @@ function authorized(request: Request) {
 
 async function handle(request: Request) {
   if (!authorized(request)) return fail("UNAUTHORIZED", "Invalid or missing cron secret.", 401);
-  return ok(await syncUserbotMessages(40, 60).catch((error) => ({ error: error instanceof Error ? error.message : "sync failed" })));
+  return ok(await syncUserbotMessages(40, 60, { budgetMs: 100_000 }).catch((error) => ({ error: error instanceof Error ? error.message : "sync failed" })));
 }
 
 export const GET = handle;

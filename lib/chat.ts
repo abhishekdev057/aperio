@@ -143,6 +143,25 @@ export async function updateMessageStatus(id: string, status: string, error?: st
   await query(`UPDATE chat_messages SET status=$2, error=$3 WHERE id=$1`, [id, status, error ?? null]);
 }
 
+/**
+ * An outbound row is inserted as "pending" and flipped to "sent" once the
+ * provider accepts it. If the serverless function is killed in between (slow
+ * MTProto connect, timeout) the row stays "pending" forever and the UI spins.
+ * Flip anything stuck for over a minute to "failed" so it stops spinning and
+ * the admin can resend.
+ */
+export async function reapStalePendingOutbound(threadId?: string) {
+  await query(
+    `UPDATE chat_messages
+        SET status='failed',
+            error=COALESCE(error, 'Send timed out — no delivery confirmation. Try again.')
+      WHERE direction='out' AND status='pending'
+        AND created_at < now() - interval '70 seconds'
+        ${threadId ? "AND thread_id=$1" : ""}`,
+    threadId ? [threadId] : [],
+  );
+}
+
 export async function listThreads(opts: { channel?: string; q?: string } = {}) {
   const c = opts.channel && opts.channel !== "all" ? opts.channel : null;
   const like = opts.q ? `%${opts.q.toLowerCase()}%` : null;

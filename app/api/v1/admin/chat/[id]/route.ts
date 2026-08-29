@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/admin";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
-import { getMessages, getThread, markThreadRead } from "@/lib/chat";
+import { getMessages, getThread, markThreadRead, reapStalePendingOutbound } from "@/lib/chat";
 import { sendChatMessage } from "@/lib/chat-send";
 import { idSchema } from "@/lib/validation";
 
@@ -16,6 +16,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const id = idSchema.parse((await context.params).id);
     const thread = await getThread(id);
     if (!thread) return fail("NOT_FOUND", "Thread not found.", 404);
+    await reapStalePendingOutbound(id);
     const params = new URL(request.url).searchParams;
     const messages = await getMessages(id, {
       sinceId: params.get("sinceId") || undefined,

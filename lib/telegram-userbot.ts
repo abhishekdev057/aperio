@@ -231,7 +231,8 @@ function peerTypeOf(entity: any): "user" | "chat" | "channel" {
   return "user";
 }
 
-export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
+export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40, opts: { budgetMs?: number } = {}) {
+  const budgetMs = opts.budgetMs ?? 45_000;
   const lock = await query<{ ok: boolean }>(
     `INSERT INTO chat_sync_state (channel, running, synced_at) VALUES ('telegram_userbot', true, now())
      ON CONFLICT (channel) DO UPDATE SET running = true, synced_at = now()
@@ -241,10 +242,15 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
   if (!lock[0]) return { skipped: true };
 
   let stored = 0;
+  const replyQueue: Array<{ threadId: string; text: string }> = [];
   try {
     await withUserbot({ waitMs: 0 }, async (client) => {
+    const startedAt = Date.now();
     const dialogs = await client.getDialogs({ limit: maxDialogs });
     for (const dialog of dialogs) {
+      // Hard time budget: never hold the session lock long enough to make a
+      // concurrent send time out. Remaining dialogs are picked up next run.
+      if (Date.now() - startedAt > budgetMs) break;
       const entity: any = dialog.entity;
       if (!entity || peerTypeOf(entity) === "channel") continue;
       const peerId = String(dialog.id);
@@ -321,15 +327,21 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
         });
         if (saved) {
           stored += 1;
-          // auto-reply only to fresh inbound text, never to a backlog
+          // auto-reply only to fresh inbound text, never to a backlog — but
+          // queue it and run it AFTER the session lock is released so the
+          // reply's own send doesn't fight this sync for the lock.
           if (!msg.out && msg.message && Date.now() - at.getTime() < 12 * 60_000) {
-            const { maybeAutoReply } = await import("@/lib/assistant");
-            void maybeAutoReply(threadId, msg.message);
+            replyQueue.push({ threadId, text: msg.message });
           }
         }
       }
     }
     });
+
+    if (replyQueue.length) {
+      const { maybeAutoReply } = await import("@/lib/assistant");
+      for (const item of replyQueue) await maybeAutoReply(item.threadId, item.text);
+    }
     await query(`UPDATE chat_sync_state SET running=false, detail=$1, synced_at=now() WHERE channel='telegram_userbot'`, [`ok, ${stored} new`]);
     return { stored };
   } catch (error) {

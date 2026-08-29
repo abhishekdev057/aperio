@@ -104,6 +104,15 @@ export async function buildUserContext(userId: string): Promise<string> {
  * system + user context and send it back on the same channel.
  */
 export async function maybeAutoReply(threadId: string, incomingText: string | null) {
+  try {
+    await runAutoReply(threadId, incomingText);
+  } catch (error) {
+    // Never let this reject unhandled — it's always called fire-and-forget.
+    console.error("assistant auto-reply failed", error instanceof Error ? error.message : error);
+  }
+}
+
+async function runAutoReply(threadId: string, incomingText: string | null) {
   const text = (incomingText ?? "").trim();
   if (text.length < 2) return;
 
@@ -116,44 +125,71 @@ export async function maybeAutoReply(threadId: string, incomingText: string | nu
   );
   if (!thread) return;
   if (thread.autoReply === false) return;
-  if (thread.autoReply === null) {
-    if (cfg.linkedOnly && !thread.userId) return;
-  }
+  if (thread.autoReply === null && cfg.linkedOnly && !thread.userId) return;
 
   const gemini = await import("@/lib/gemini");
   if (!gemini.isGeminiConfigured()) return;
 
-  const userContext = thread.userId
-    ? await buildUserContext(thread.userId)
-    : "This person is not a signed-up Aperio user. Encourage them to sign up at Aperio to get an analysis.";
+  let userContext: string;
+  try {
+    userContext = thread.userId
+      ? await buildUserContext(thread.userId)
+      : "This person is not a signed-up Aperio user. Encourage them warmly to sign up at Aperio to get an evidence-based analysis.";
+  } catch (error) {
+    console.error("assistant: buildUserContext failed", error instanceof Error ? error.message : error);
+    userContext = thread.userId
+      ? "The user's Aperio profile could not be loaded right now. Keep the reply general and suggest they open the app."
+      : "This person is not a signed-up Aperio user. Encourage them to sign up at Aperio.";
+  }
 
   const history = await query<{ direction: string; text: string | null }>(
     `SELECT direction, text FROM chat_messages
-     WHERE thread_id=$1 AND text IS NOT NULL AND text <> ''
+     WHERE thread_id=$1 AND text IS NOT NULL AND text <> '' AND kind IN ('text')
      ORDER BY created_at DESC LIMIT 12`,
     [threadId],
   );
   const turns = history
     .reverse()
-    .slice(0, 11)
     .map((m) => ({ role: (m.direction === "out" ? "model" : "user") as "user" | "model", text: String(m.text) }));
+  // Drop the just-recorded inbound message if it's the last turn — it's passed
+  // separately as `message`.
+  if (turns.length && turns[turns.length - 1].role === "user" && turns[turns.length - 1].text.trim() === text) {
+    turns.pop();
+  }
 
   let reply: string;
   try {
     reply = await gemini.assistantReply({
       channel: thread.channel.replace("_userbot", "").replace("_bot", ""),
       userContext,
-      history: turns.slice(0, -1),
+      history: turns.slice(-10),
       message: text,
     });
   } catch (error) {
     console.error("assistant reply generation failed", error instanceof Error ? error.message : error);
     return;
   }
-  if (!reply || reply.length < 2) return;
+  if (!reply || reply.length < 2) {
+    console.error("assistant reply generation returned empty");
+    return;
+  }
 
   const { sendChatMessage } = await import("@/lib/chat-send");
-  await sendChatMessage(threadId, { text: reply }).catch((error) =>
-    console.error("assistant reply send failed", error instanceof Error ? error.message : error),
-  );
+  try {
+    await sendChatMessage(threadId, { text: reply });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "send failed";
+    console.error("assistant reply send failed", detail);
+    // Leave a visible trace in the workspace so a dead Telegram session or an
+    // expired WhatsApp window is obvious instead of silent.
+    const { recordMessage } = await import("@/lib/chat");
+    await recordMessage({
+      threadId,
+      direction: "out",
+      kind: "system",
+      text: `⚠️ Auto-reply generated but not delivered: ${detail}`,
+      senderName: "Aperio",
+      status: "failed",
+    }).catch(() => {});
+  }
 }

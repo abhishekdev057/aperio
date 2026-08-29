@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { query } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
 import { maybeAutoReply } from "@/lib/assistant";
@@ -7,6 +7,7 @@ import { parseLinkCode } from "@/lib/telegram";
 import { getWhatsAppConfig, sendWhatsAppText, verifyWhatsAppSignature } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 interface WaMediaObj {
   id?: string;
@@ -137,7 +138,10 @@ async function handleInbound(msg: WaMessage, nameByWaId: Map<string | undefined,
   // Link-code flow for plain text that looks like a code.
   const code = kind === "text" ? parseLinkCode(bodyText ?? undefined) : null;
   if (!code) {
-    if (saved && kind === "text" && bodyText) void maybeAutoReply(threadId, bodyText);
+    if (saved && kind === "text" && bodyText) {
+      const t = bodyText;
+      after(() => maybeAutoReply(threadId, t));
+    }
     return;
   }
   const rows = await query<{ id: string; userId: string } & Record<string, unknown>>(

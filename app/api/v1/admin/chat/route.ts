@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { requireAdmin } from "@/lib/admin";
 import { handleApiError, ok } from "@/lib/api";
 import { one } from "@/lib/db";
@@ -19,7 +21,10 @@ export async function GET(request: Request) {
       const state = await one<{ stale: boolean }>(
         `SELECT (synced_at IS NULL OR synced_at < now() - interval '10 seconds') AS stale FROM chat_sync_state WHERE channel='telegram_userbot'`,
       );
-      if (!state || state.stale) void syncUserbotMessages().catch(() => {});
+      // Keep the opportunistic sync small so it releases the session lock fast
+      // and never makes an in-flight send/poll time out. Run it via after() so
+      // the sync + any queued AI replies finish instead of being frozen.
+      if (!state || state.stale) after(() => syncUserbotMessages(12, 10, { budgetMs: 18_000 }).catch(() => {}));
     }
 
     return ok({ threads: await listThreads({ channel, q }) });

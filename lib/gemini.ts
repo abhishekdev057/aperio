@@ -471,8 +471,25 @@ ${input.userContext}`;
     const response = await ai.models.generateContent({
       model,
       contents,
-      config: { systemInstruction: system, maxOutputTokens: 900, temperature: 0.35 },
+      config: {
+        systemInstruction: system,
+        maxOutputTokens: 1_200,
+        temperature: 0.35,
+        // Chat replies must be fast and must actually return text — with
+        // thinking on, 2.5-flash can spend the whole budget reasoning and
+        // return an empty string, which looked like "the bot isn't replying".
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     });
-    return (response.text ?? "").trim();
+    const text = (response.text ?? "").trim();
+    if (text) return text;
+    // Last-resort retry without the token ceiling in case the model still
+    // returned nothing (safety block, truncation).
+    const retry = await ai.models.generateContent({
+      model,
+      contents,
+      config: { systemInstruction: system, temperature: 0.4, thinkingConfig: { thinkingBudget: 0 } },
+    });
+    return (retry.text ?? "").trim();
   });
 }

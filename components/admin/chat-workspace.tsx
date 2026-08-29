@@ -50,6 +50,16 @@ type Preview = { src: string; kind: "image" | "video"; name: string };
 // message kinds that actually carry a downloadable/previewable attachment
 const MEDIA_KINDS = new Set(["image", "sticker", "video", "audio", "voice", "file"]);
 
+function renderStatusIcon(m: Message) {
+  // A "pending" row older than 90s means the send never confirmed — show it as
+  // stalled instead of spinning forever (the server also reaps these).
+  const stalled = m.status === "pending" && Date.now() - new Date(m.createdAt).getTime() > 90_000;
+  if (m.status === "failed" || stalled) return <AlertCircle size={11} />;
+  if (m.status === "pending") return <LoaderCircle size={10} className="animate-spin" />;
+  if (m.status === "read" || m.status === "delivered") return <CheckCheck size={11} />;
+  return <Check size={11} />;
+}
+
 function MediaBubble({ message, onOpen }: { message: Message; onOpen: (p: Preview) => void }) {
   const src = `/api/v1/admin/chat/media/${message.id}`;
   const name = message.mediaName || `${message.kind}-${message.id.slice(0, 6)}`;
@@ -432,7 +442,7 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
                       {MEDIA_KINDS.has(m.kind) && <MediaBubble message={m} onOpen={setPreview} />}
                       <span className={cn("mt-0.5 flex items-center justify-end gap-1 text-[10px]", m.direction === "out" ? "text-white/70" : "text-[var(--muted)]")}>
                         {timeLabel(m.createdAt)}
-                        {m.direction === "out" && (m.status === "failed" ? <AlertCircle size={11} /> : m.status === "pending" ? <LoaderCircle size={10} className="animate-spin" /> : m.status === "read" || m.status === "delivered" ? <CheckCheck size={11} /> : <Check size={11} />)}
+                        {m.direction === "out" && renderStatusIcon(m)}
                       </span>
                     </div>
                   </div>
