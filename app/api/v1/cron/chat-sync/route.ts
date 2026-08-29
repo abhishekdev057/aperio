@@ -1,6 +1,9 @@
 import { fail, ok } from "@/lib/api";
 import { syncUserbotMessages } from "@/lib/telegram-userbot";
 
+// Not registered in vercel.json (Hobby allows only 2 daily crons). Point an
+// external scheduler at this with `?secret=<CRON_SECRET>` for background
+// Telegram sync; otherwise sync runs opportunistically while /admin/chat is open.
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
