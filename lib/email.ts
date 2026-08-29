@@ -3,85 +3,76 @@ import "server-only";
 import { getIntegrationRuntime } from "@/lib/settings";
 
 export interface EmailConfig {
-  provider: "smtp" | "resend" | null;
+  provider: "smtp" | null;
   fromName: string;
   fromEmail: string;
 }
 
-async function resolveConfig(): Promise<EmailConfig & { smtp?: Record<string, string>; resendKey?: string }> {
+interface ResolvedConfig {
+  ready: boolean;
+  enabled: boolean;
+  fromName: string;
+  fromEmail: string;
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+}
+
+async function resolveConfig(): Promise<ResolvedConfig> {
   try {
     const smtp = await getIntegrationRuntime("email.smtp");
-    if (smtp.enabled && smtp.config.host && smtp.secret("pass") && smtp.config.fromEmail) {
-      return {
-        provider: "smtp",
-        fromName: smtp.config.fromName || "Aperio",
-        fromEmail: smtp.config.fromEmail,
-        smtp: {
-          host: smtp.config.host,
-          port: String(smtp.config.port || "587"),
-          secure: String(smtp.config.secure || "").toLowerCase(),
-          user: smtp.config.user || "",
-          pass: smtp.secret("pass") || "",
-        },
-      };
-    }
+    const host = String(smtp.config.host ?? "").trim();
+    const user = String(smtp.config.user ?? "").trim();
+    const pass = smtp.secret("pass") ?? "";
+    const port = Number(smtp.config.port ?? 587) || 587;
+    return {
+      ready: Boolean(host && user && pass),
+      enabled: smtp.enabled,
+      fromName: String(smtp.config.fromName ?? "").trim() || "Aperio",
+      fromEmail: String(smtp.config.fromEmail ?? "").trim() || user,
+      host,
+      port,
+      user,
+      pass,
+    };
   } catch {
-    /* fall through */
+    return { ready: false, enabled: false, fromName: "Aperio", fromEmail: "", host: "", port: 587, user: "", pass: "" };
   }
-  try {
-    const resend = await getIntegrationRuntime("email.resend");
-    if (resend.enabled && resend.secret("apiKey") && resend.config.fromEmail) {
-      return {
-        provider: "resend",
-        fromName: resend.config.fromName || "Aperio",
-        fromEmail: resend.config.fromEmail,
-        resendKey: resend.secret("apiKey") || "",
-      };
-    }
-  } catch {
-    /* fall through */
-  }
-  return { provider: null, fromName: "Aperio", fromEmail: "" };
 }
 
 export async function getEmailConfig(): Promise<EmailConfig> {
-  const { provider, fromName, fromEmail } = await resolveConfig();
-  return { provider, fromName, fromEmail };
+  const c = await resolveConfig();
+  return { provider: c.ready && c.enabled ? "smtp" : null, fromName: c.fromName, fromEmail: c.fromEmail };
 }
 
 export async function isEmailConfigured() {
-  return (await resolveConfig()).provider !== null;
+  const c = await resolveConfig();
+  return c.ready && c.enabled;
 }
 
-export async function sendEmail(to: string, subject: string, html: string, text?: string) {
-  const cfg = await resolveConfig();
-  if (!cfg.provider) throw new Error("EMAIL_NOT_CONFIGURED");
-  const from = `${cfg.fromName} <${cfg.fromEmail}>`;
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  text?: string,
+  opts: { requireEnabled?: boolean } = {},
+) {
+  const c = await resolveConfig();
+  if (!c.ready) throw new Error("EMAIL_NOT_CONFIGURED");
+  if ((opts.requireEnabled ?? true) && !c.enabled) throw new Error("EMAIL_DISABLED");
+
+  const from = `${c.fromName} <${c.fromEmail}>`;
   const plain = text ?? html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
-  if (cfg.provider === "smtp" && cfg.smtp) {
-    const nodemailer = (await import("nodemailer")).default;
-    const port = Number(cfg.smtp.port) || 587;
-    const transporter = nodemailer.createTransport({
-      host: cfg.smtp.host,
-      port,
-      secure: cfg.smtp.secure === "true" || port === 465,
-      auth: cfg.smtp.user ? { user: cfg.smtp.user, pass: cfg.smtp.pass } : undefined,
-    });
-    await transporter.sendMail({ from, to, subject, text: plain, html });
-    return;
-  }
-
-  // Resend
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { authorization: `Bearer ${cfg.resendKey}`, "content-type": "application/json" },
-    body: JSON.stringify({ from, to, subject, html, text: plain }),
+  const nodemailer = (await import("nodemailer")).default;
+  const transporter = nodemailer.createTransport({
+    host: c.host,
+    port: c.port,
+    secure: c.port === 465, // 465 = implicit TLS; 587/25 = STARTTLS, handled automatically
+    auth: { user: c.user, pass: c.pass },
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`RESEND_SEND_FAILED: ${res.status} ${detail.slice(0, 200)}`);
-  }
+  await transporter.sendMail({ from, to, subject, text: plain, html });
 }
 
 // --- templates ---------------------------------------------------------------
@@ -131,11 +122,13 @@ export function notificationEmail(text: string) {
   };
 }
 
-/** Test-connection helper: sends a real email to `to`. */
+/** Test-connection helper: sends a real email to `to`, ignoring the Enabled toggle. */
 export async function sendTestEmail(to: string) {
   await sendEmail(
     to,
     "Aperio email test",
-    shell("Email is working", `<p style="margin:0">This is a test message from Aperio's admin integrations page. If you can read this, sending is configured correctly.</p>`),
+    shell("Email is working", `<p style="margin:0">This is a test message from Aperio's admin integrations page. If you can read this, sending is configured correctly. Remember to tick <b>Enabled</b> and Save so notification emails actually go out.</p>`),
+    undefined,
+    { requireEnabled: false },
   );
 }

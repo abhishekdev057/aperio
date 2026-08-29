@@ -14,12 +14,14 @@ export async function POST(_: Request, context: { params: Promise<{ key: string 
     const key = (await context.params).key;
     if (!schemaFor(key)) return fail("NOT_FOUND", "Unknown integration.", 404);
 
-    if (key === "email.smtp" || key === "email.resend") {
+    if (key === "email.smtp") {
       try {
         await sendTestEmail(admin.email);
-        return ok({ ok: true, detail: `Test email sent to ${admin.email}. Check your inbox.` });
+        return ok({ ok: true, detail: `Test email sent to ${admin.email}. Check your inbox — then tick Enabled + Save to turn on notification emails.` });
       } catch (error) {
-        return ok({ ok: false, detail: error instanceof Error ? error.message : "Send failed." });
+        const msg = error instanceof Error ? error.message : "Send failed.";
+        if (msg === "EMAIL_NOT_CONFIGURED") return ok({ ok: false, detail: "Fill the SMTP host, username, and password, then Save first." });
+        return ok({ ok: false, detail: msg });
       }
     }
 
