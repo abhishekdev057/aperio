@@ -47,6 +47,9 @@ function timeLabel(iso: string | null) {
 
 type Preview = { src: string; kind: "image" | "video"; name: string };
 
+// message kinds that actually carry a downloadable/previewable attachment
+const MEDIA_KINDS = new Set(["image", "sticker", "video", "audio", "voice", "file"]);
+
 function MediaBubble({ message, onOpen }: { message: Message; onOpen: (p: Preview) => void }) {
   const src = `/api/v1/admin/chat/media/${message.id}`;
   const name = message.mediaName || `${message.kind}-${message.id.slice(0, 6)}`;
@@ -426,7 +429,7 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
                   <div key={m.id} className={cn("flex", m.direction === "out" ? "justify-end" : "justify-start")}>
                     <div className={cn("max-w-[75%] rounded-[12px] px-3 py-2 text-sm", m.direction === "out" ? "bg-[var(--primary)] text-white" : "bg-[var(--surface)] border")}>
                       {m.text && <p className="whitespace-pre-wrap break-words">{m.text}</p>}
-                      {m.kind !== "text" && <MediaBubble message={m} onOpen={setPreview} />}
+                      {MEDIA_KINDS.has(m.kind) && <MediaBubble message={m} onOpen={setPreview} />}
                       <span className={cn("mt-0.5 flex items-center justify-end gap-1 text-[10px]", m.direction === "out" ? "text-white/70" : "text-[var(--muted)]")}>
                         {timeLabel(m.createdAt)}
                         {m.direction === "out" && (m.status === "failed" ? <AlertCircle size={11} /> : m.status === "pending" ? <LoaderCircle size={10} className="animate-spin" /> : m.status === "read" || m.status === "delivered" ? <CheckCheck size={11} /> : <Check size={11} />)}

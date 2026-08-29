@@ -72,7 +72,7 @@ export async function sendChatPoll(threadId: string, question: string, options: 
     threadId,
     direction: "out",
     kind: "system",
-    text: `📊 Poll: ${question.trim()}\n${clean.map((o, i) => `${i + 1}. ${o}`).join("\n")}`,
+    text: `📊 Poll: ${question.trim()}\n${clean.map((o) => `• ${o}`).join("\n")}`,
     senderName: "You",
     status: "pending",
   });
