@@ -1,8 +1,8 @@
 import { fail, ok } from "@/lib/api";
-import { ingestMarketSignals } from "@/lib/market";
+import { runJobIngestion } from "@/lib/jobs";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 function authorized(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -13,7 +13,7 @@ function authorized(request: Request) {
 
 async function handle(request: Request) {
   if (!authorized(request)) return fail("UNAUTHORIZED", "Invalid or missing cron secret.", 401);
-  return ok(await ingestMarketSignals());
+  return ok(await runJobIngestion());
 }
 
 export const GET = handle;

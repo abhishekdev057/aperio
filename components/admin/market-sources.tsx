@@ -2,12 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, LoaderCircle, Plus, Trash2 } from "lucide-react";
+import { Check, LoaderCircle, Play, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatRelative } from "@/lib/utils";
 
 type Source = Record<string, unknown>;
 type IntKey = { key: string; title: string };
+type Stats = {
+  totals: { totalPostings: number; withSkills: number; remote: number; lastCaptured: string | null } | null;
+  topSkills: Array<{ name: string; postings: number }>;
+  bySource: Array<{ sourceName: string; postings: number; lastCaptured: string }>;
+};
 
 const blank = { name: "", kind: "api", weight: 1, integrationKey: "", region: "global", enabled: true };
 
@@ -53,11 +59,31 @@ function SourceRow({
   );
 }
 
-export function MarketSources({ initial }: { initial: { sources: Source[]; integrationKeys: IntKey[] } }) {
+export function MarketSources({ initial }: { initial: { sources: Source[]; integrationKeys: IntKey[]; stats: Stats } }) {
   const [sources, setSources] = useState(initial.sources);
   const [draft, setDraft] = useState<Record<string, unknown>>(blank);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [stats, setStats] = useState<Stats>(initial.stats);
+  const [ingesting, setIngesting] = useState(false);
+  const [ingestMsg, setIngestMsg] = useState("");
+
+  async function runIngestion() {
+    setIngesting(true);
+    setIngestMsg("");
+    try {
+      const res = await fetch("/api/v1/admin/jobs", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Ingestion failed.");
+      setStats(json.data.stats);
+      const r = json.data.result;
+      setIngestMsg(`Done — ${r.postings ?? 0} postings, ${r.observations ?? 0} demand points from ${r.sources ?? 0} source(s).`);
+    } catch (err) {
+      setIngestMsg(err instanceof Error ? err.message : "Ingestion failed.");
+    } finally {
+      setIngesting(false);
+    }
+  }
 
   async function save(row: Record<string, unknown>) {
     setSaving(true);
@@ -87,15 +113,42 @@ export function MarketSources({ initial }: { initial: { sources: Source[]; integ
     setSources((s) => s.filter((x) => x.id !== id));
   }
 
+  const t = stats?.totals;
+
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Job market</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Weighted job-posting sources feed the demand outlook and forecast. Add API credentials under{" "}
-          <Link href="/admin/integrations" className="font-medium text-[var(--primary)]">Integrations</Link>, then link them here. Higher weight = more influence on the blended demand index.
+        <p className="mt-1 max-w-3xl text-sm text-[var(--muted)]">
+          Each source below is a real job board Aperio scans. Ingestion does two things: (1) stores the actual openings, which users
+          see on their <b className="text-[var(--foreground)]">Jobs</b> page ranked by skill overlap, and (2) counts how often each
+          skill appears, which powers the demand outlook on analysis reports. Higher weight = more say in the blended demand index.
+          Arbeitnow needs no key; other providers take credentials under{" "}
+          <Link href="/admin/integrations" className="font-medium text-[var(--primary)]">Integrations</Link>.
         </p>
       </div>
+
+      <section className="rounded-[14px] border bg-[var(--surface)] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            <span><b className="tabular-nums">{Number(t?.totalPostings ?? 0)}</b> <span className="text-[var(--muted)]">postings</span></span>
+            <span><b className="tabular-nums">{Number(t?.withSkills ?? 0)}</b> <span className="text-[var(--muted)]">with skill matches</span></span>
+            <span><b className="tabular-nums">{Number(t?.remote ?? 0)}</b> <span className="text-[var(--muted)]">remote</span></span>
+            <span className="text-[var(--muted)]">last run: {t?.lastCaptured ? formatRelative(t.lastCaptured) : "never"}</span>
+          </div>
+          <Button size="sm" onClick={runIngestion} disabled={ingesting}>
+            {ingesting ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}Run ingestion now
+          </Button>
+        </div>
+        {ingestMsg && <p className="mt-2 text-xs text-[var(--muted-strong)]">{ingestMsg}</p>}
+        {stats?.topSkills?.length ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {stats.topSkills.map((s) => (
+              <span key={s.name} className="rounded-md bg-[var(--surface-muted)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--muted-strong)]">{s.name} · {s.postings}</span>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       <div className="overflow-hidden rounded-[14px] border bg-[var(--surface)]">
         <div className="hidden grid-cols-[1.4fr_.8fr_.7fr_1fr_.6fr_auto] gap-2 border-b bg-[var(--surface-elevated)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] sm:grid">
@@ -124,7 +177,9 @@ export function MarketSources({ initial }: { initial: { sources: Source[]; integ
       {error && <p className="text-sm text-[var(--critical)]">{error}</p>}
 
       <p className="text-xs text-[var(--muted)]">
-        Sources only shape the outlook once observations are ingested (<code>npm run market:ingest</code> reads enabled sources + their linked credentials). No source produces fabricated numbers.
+        Ingestion runs automatically once a day (Vercel cron), on demand with the button above, or via
+        <code> npm run market:ingest</code>. Nothing is fabricated — a source with no reachable data writes nothing, and the
+        demand forecast needs at least two dated runs.
       </p>
     </div>
   );

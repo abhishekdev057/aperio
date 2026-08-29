@@ -1,4 +1,5 @@
-import { ArrowDownRight, ArrowUpRight, Minus, PlugZap, TrendingUp } from "lucide-react";
+import Link from "next/link";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Minus, PlugZap, TrendingUp } from "lucide-react";
 import type { MarketOutlook as Outlook, SkillLeverage } from "@/lib/market";
 
 const trendMeta = {
@@ -27,6 +28,9 @@ export function MarketOutlook({ leverage, outlook }: { leverage: SkillLeverage[]
         Leverage is computed from the roles Aperio tracks: how many of them need each skill, and how often it is critical.
         It does not change your match score.
       </p>
+      <Link href="/jobs" className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--primary)]">
+        See live openings that match your skills <ArrowRight size={13} />
+      </Link>
 
       <div className="mt-5 space-y-2">
         {top.map((item) => {

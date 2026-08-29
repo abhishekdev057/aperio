@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Briefcase,
   ChartNoAxesCombined,
   ChevronRight,
   Compass,
@@ -30,6 +31,7 @@ const nav = [
   { href: "/learning", label: "Course Plan", mobileLabel: "Plan", icon: GraduationCap },
   { href: "/practice", label: "Practice", icon: Dumbbell },
   { href: "/courses", label: "Courses", icon: LibraryBig },
+  { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/roles", label: "Roles", icon: Compass },
   { href: "/history", label: "History", icon: History },
 ] as const;
