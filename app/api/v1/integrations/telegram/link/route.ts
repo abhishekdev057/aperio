@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { query } from "@/lib/db";
 import { newLinkCode } from "@/lib/notifications";
-import { isTelegramConfigured, telegramBotUsername } from "@/lib/telegram";
+import { getTelegramConfig } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 
@@ -12,8 +12,9 @@ const CODE_TTL_MINUTES = 30;
 export async function POST() {
   try {
     const user = await requireUser();
-    if (!isTelegramConfigured()) {
-      return fail("PROVIDER_NOT_CONFIGURED", "Telegram is not configured on the server yet.", 503);
+    const telegram = await getTelegramConfig();
+    if (!telegram.configured) {
+      return fail("PROVIDER_NOT_CONFIGURED", "Telegram is not configured yet. An admin can add the bot token in the admin area.", 503);
     }
     const code = newLinkCode();
     const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString();
@@ -25,14 +26,13 @@ export async function POST() {
          address=NULL, verified_at=NULL, updated_at=now()`,
       [randomUUID(), user.id, code, expiresAt],
     );
-    const botUsername = telegramBotUsername();
     return ok({
       code,
       expiresAt,
-      botUsername,
-      deepLink: botUsername ? `https://t.me/${botUsername}?start=${code}` : null,
-      instructions: botUsername
-        ? `Open the link, press Start, or send "/start ${code}" to @${botUsername}.`
+      botUsername: telegram.botUsername,
+      deepLink: telegram.botUsername ? `https://t.me/${telegram.botUsername}?start=${code}` : null,
+      instructions: telegram.botUsername
+        ? `Open the link, press Start, or send "/start ${code}" to @${telegram.botUsername}.`
         : `Send "/start ${code}" to the Aperio bot on Telegram.`,
     });
   } catch (error) {

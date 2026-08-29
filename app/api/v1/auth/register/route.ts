@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { createSession } from "@/lib/auth";
 import { db, one } from "@/lib/db";
 import { fail, handleApiError, ok } from "@/lib/api";
+import { syncAdminRole } from "@/lib/admin";
+import { logActivity } from "@/lib/activity";
 import { registerSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -19,6 +21,8 @@ export async function POST(request: Request) {
       tx`INSERT INTO preferences (user_id) VALUES (${id})`,
     ]);
     await createSession(id);
+    await syncAdminRole(id, input.email);
+    await logActivity({ action: "auth.register", userId: id, actorEmail: input.email, request });
     return ok({ id, email: input.email, fullName: input.fullName }, { status: 201 });
   } catch (error) { return handleApiError(error); }
 }

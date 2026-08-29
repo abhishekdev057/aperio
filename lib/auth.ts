@@ -40,7 +40,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (!token) return null;
   const user = await one<SessionUser & Record<string, unknown>>(
-    `SELECT u.id, u.email, u.full_name AS "fullName",
+    `SELECT u.id, u.email, u.full_name AS "fullName", u.role,
       COALESCE(p.onboarding_completed, false) AS "onboardingCompleted"
      FROM sessions s
      JOIN users u ON u.id = s.user_id

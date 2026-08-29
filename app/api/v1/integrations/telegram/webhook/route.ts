@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import {
-  type TelegramUpdate,
-  isTelegramConfigured,
-  parseLinkCode,
-  sendTelegramMessage,
-  telegramWebhookSecret,
-} from "@/lib/telegram";
+import { logActivity } from "@/lib/activity";
+import { type TelegramUpdate, getTelegramConfig, parseLinkCode, sendTelegramMessage } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 
@@ -14,11 +9,11 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   const ok = () => NextResponse.json({ ok: true });
 
-  const secret = telegramWebhookSecret();
-  if (secret && request.headers.get("x-telegram-bot-api-secret-token") !== secret) {
+  const telegram = await getTelegramConfig();
+  if (telegram.webhookSecret && request.headers.get("x-telegram-bot-api-secret-token") !== telegram.webhookSecret) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
-  if (!isTelegramConfigured()) return ok();
+  if (!telegram.configured) return ok();
 
   let update: TelegramUpdate;
   try {
@@ -63,6 +58,7 @@ export async function POST(request: Request) {
     [chatIdStr, rows[0].id],
   );
 
+  await logActivity({ action: "channel.link", userId: rows[0].userId, entityType: "channel", entityId: rows[0].id, metadata: { platform: "telegram" }, request });
   await sendTelegramMessage(
     chatIdStr,
     "<b>Aperio linked.</b>\nYou'll get roadmap reminders, a weekly digest, and analysis updates here. Manage them in Settings.",

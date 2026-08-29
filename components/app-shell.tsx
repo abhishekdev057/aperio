@@ -12,6 +12,7 @@ import {
   LogOut,
   Map,
   Settings,
+  Shield,
   Target,
   UserRound,
 } from "lucide-react";
@@ -46,10 +47,11 @@ function NavLink({ href, label, icon: Icon, active }: { href: string; label: str
   );
 }
 
-export function AppShell({ children, user }: { children: React.ReactNode; user: { fullName: string; email: string } }) {
+export function AppShell({ children, user }: { children: React.ReactNode; user: { fullName: string; email: string; role?: string } }) {
   const pathname = usePathname();
   const router = useRouter();
-  const allItems = [...nav, ...account];
+  const accountItems = user.role === "admin" ? [...account, { href: "/admin", label: "Admin", icon: Shield }] : account;
+  const allItems = [...nav, ...accountItems];
   const current = allItems.find((item) => pathname.startsWith(item.href));
 
   async function logout() {
@@ -68,7 +70,7 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
         <div className="mx-2 my-5 border-t" />
         <p className="px-3 text-[10px] font-semibold uppercase tracking-[.14em] text-[var(--muted)]">Account</p>
         <nav className="mt-2 space-y-1" aria-label="Account navigation">
-          {account.map(({ href, label, icon }) => <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />)}
+          {accountItems.map(({ href, label, icon }) => <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />)}
         </nav>
 
         <div className="mt-auto space-y-3">

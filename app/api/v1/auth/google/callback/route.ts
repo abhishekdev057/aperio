@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createSession } from "@/lib/auth";
+import { syncAdminRole } from "@/lib/admin";
+import { logActivity, touchLastSeen } from "@/lib/activity";
 import { db, one, query } from "@/lib/db";
 import {
   OAUTH_STATE_COOKIE,
@@ -92,6 +94,16 @@ export async function GET(request: Request) {
     console.error("Google OAuth: session creation failed", error instanceof Error ? error.message : error);
     return back("/login?error=google_session");
   }
+
+  await syncAdminRole(userId, email);
+  await touchLastSeen(userId);
+  await logActivity({
+    action: isNewUser ? "auth.register" : "auth.login.google",
+    userId,
+    actorEmail: email,
+    metadata: { provider: "google" },
+    request,
+  });
 
   return back(isNewUser ? "/onboarding" : "/overview");
 }

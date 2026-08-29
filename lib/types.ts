@@ -30,6 +30,7 @@ export interface SessionUser {
   email: string;
   fullName: string;
   onboardingCompleted: boolean;
+  role: "user" | "admin";
 }
 
 export interface RoleSummary {

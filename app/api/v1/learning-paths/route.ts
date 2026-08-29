@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { createLearningPath, getLearningPath } from "@/lib/learning";
+import { logActivity } from "@/lib/activity";
 import { learningPathSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -20,6 +21,11 @@ export async function POST(request: Request) {
     const user = await requireUser();
     const input = learningPathSchema.parse(await request.json().catch(() => ({})));
     const path = await createLearningPath(user.id, input.analysisId ?? null, input.weeklyHours);
+    await logActivity({
+      action: "learning_path.generate", userId: user.id, entityType: "learning_path", entityId: path.id,
+      metadata: { weeks: path.totalWeeks, weeklyHours: path.weeklyHours, generator: path.generator },
+      request,
+    });
     return ok(path, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "ANALYSIS_NOT_FOUND") {

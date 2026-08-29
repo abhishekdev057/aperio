@@ -2,6 +2,8 @@ import { compare } from "bcryptjs";
 import { createSession } from "@/lib/auth";
 import { one } from "@/lib/db";
 import { fail, handleApiError, ok } from "@/lib/api";
+import { syncAdminRole } from "@/lib/admin";
+import { logActivity, touchLastSeen } from "@/lib/activity";
 import { loginSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -13,6 +15,9 @@ export async function POST(request: Request) {
     if (!user || !user.passwordHash) return fail("INVALID_CREDENTIALS", "Email or password is incorrect.", 401);
     if (!(await compare(input.password, user.passwordHash))) return fail("INVALID_CREDENTIALS", "Email or password is incorrect.", 401);
     await createSession(user.id);
+    await syncAdminRole(user.id, input.email);
+    await touchLastSeen(user.id);
+    await logActivity({ action: "auth.login", userId: user.id, actorEmail: input.email, request });
     return ok({ id: user.id, email: input.email, fullName: user.fullName });
   } catch (error) { return handleApiError(error); }
 }

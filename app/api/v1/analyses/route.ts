@@ -3,6 +3,7 @@ import { fail, handleApiError, ok } from "@/lib/api";
 import { runAnalysis } from "@/lib/analyzer";
 import { one } from "@/lib/db";
 import { notifyAnalysisReady } from "@/lib/notifications";
+import { logActivity } from "@/lib/activity";
 import { getAnalysisHistory } from "@/lib/reports";
 import { analysisSchema, paginationSchema } from "@/lib/validation";
 
@@ -27,6 +28,11 @@ export async function POST(request: Request) {
     );
     if (recent && !recent.allowed) return fail("RATE_LIMITED", "Please wait a moment before running another analysis.", 429);
     const result = await runAnalysis(user.id, input.roleId, input.experienceLevel, input.resumeId);
+    await logActivity({
+      action: "analysis.run", userId: user.id, entityType: "analysis", entityId: result.id,
+      metadata: { roleId: input.roleId, level: input.experienceLevel, overall: result.overallScore, technical: result.technicalScore, soft: result.softScore },
+      request,
+    });
     await notifyAnalysisReady(user.id, result.id).catch((error) => {
       console.error("Analysis notification failed", error instanceof Error ? error.message : "unknown error");
     });

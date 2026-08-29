@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { query } from "@/lib/db";
-import { isTelegramConfigured, sendTelegramMessage } from "@/lib/telegram";
+import { getTelegramConfig, sendTelegramMessage } from "@/lib/telegram";
 
 export type NotificationKind = "roadmap" | "weekly_digest" | "analysis" | "inactivity" | "link_confirm";
 
@@ -37,7 +37,7 @@ async function linkedChannels(userId: string): Promise<LinkedChannel[]> {
 
 async function deliver(channel: LinkedChannel, text: string) {
   if (channel.platform === "telegram") {
-    if (!isTelegramConfigured()) throw new Error("TELEGRAM_NOT_CONFIGURED");
+    if (!(await getTelegramConfig()).configured) throw new Error("TELEGRAM_NOT_CONFIGURED");
     await sendTelegramMessage(channel.address, text);
     return;
   }

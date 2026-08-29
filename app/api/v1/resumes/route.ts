@@ -4,6 +4,7 @@ import { extractText } from "unpdf";
 import { requireUser } from "@/lib/auth";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { query } from "@/lib/db";
+import { logActivity } from "@/lib/activity";
 import { inspectResumeWithGemini, isGeminiConfigured } from "@/lib/gemini";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       return fail("AI_PROCESSING_FAILED", "Aperio could not verify this document right now. Please try again.", 502);
     }
     if (!inspection.isResume || inspection.confidence < 0.72) {
+      await logActivity({ action: "resume.rejected", userId: user.id, metadata: { documentType: inspection.documentType, confidence: inspection.confidence }, request });
       return fail("NOT_A_RESUME", inspection.rejectionReason || "This file does not appear to be a professional resume or CV.", 422);
     }
 
@@ -88,6 +90,11 @@ export async function POST(request: Request) {
        VALUES ($1,$2,$3,$4,$5,$6,'processed',$7,$8,$9::jsonb,'gemini',$10::jsonb)`,
       [id, user.id, filename, file.type, file.size, text, inspection.documentType, inspection.confidence, JSON.stringify(inspection), JSON.stringify(inspection.warnings)],
     );
+    await logActivity({
+      action: "resume.upload", userId: user.id, entityType: "resume", entityId: id,
+      metadata: { documentType: inspection.documentType, confidence: inspection.confidence, skills: inspection.skills.length },
+      request,
+    });
     return ok({
       id, filename, mimeType: file.type, fileSize: file.size, status: "processed",
       documentType: inspection.documentType, validationConfidence: inspection.confidence,
