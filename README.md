@@ -53,7 +53,7 @@ npm test
 npm run build
 ```
 
-The app is Vercel-compatible: set `DATABASE_URL` and `GEMINI_API_KEY` as encrypted Vercel environment variables, optionally set `GEMINI_MODEL`, and deploy the repository. No credentials are committed. Never prefix these secrets with `NEXT_PUBLIC_`.
+The app is Vercel-compatible: set `DATABASE_URL` and `GEMINI_API_KEY` as encrypted Vercel environment variables, optionally set `GEMINI_MODEL` (the recommended stable default is `gemini-2.5-flash`), and deploy the repository. Aperio automatically retries supported stable Flash models when a configured model is unavailable or rejects the request. No credentials are committed. Never prefix these secrets with `NEXT_PUBLIC_`.
 
 ## AI handoff
 
