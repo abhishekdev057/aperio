@@ -32,6 +32,25 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig> {
   }
 }
 
+interface WaError {
+  message?: string;
+  code?: number;
+  error_subcode?: number;
+  error_data?: { details?: string };
+}
+
+function waFailure(prefix: string, err: WaError | undefined, httpStatus: number) {
+  const raw = err?.message || `HTTP ${httpStatus}`;
+  const details = err?.error_data?.details;
+  if (err?.code === 190 || /authenticat|access token|expired|OAuth/i.test(raw)) {
+    return `${prefix}: WhatsApp rejected the access token. Meta's temporary tokens last 24h — create a permanent System User token in Meta Business Settings and paste it under Admin → Integrations → WhatsApp.`;
+  }
+  if (err?.code === 131047 || /24 hour|re-engagement|outside the allowed window/i.test(raw + (details ?? ""))) {
+    return `${prefix}: outside WhatsApp's 24-hour window. You can only send free-form text within 24h of the contact's last message; otherwise an approved template is required.`;
+  }
+  return `${prefix}: ${raw}${details ? ` (${details})` : ""}`;
+}
+
 /** X-Hub-Signature-256 check. Skipped (returns true) when no app secret is stored. */
 export function verifyWhatsAppSignature(appSecret: string, rawBody: string, header: string | null) {
   if (!appSecret) return true;
@@ -62,8 +81,8 @@ export async function sendWhatsAppText(to: string, body: string) {
       text: { preview_url: false, body: toWhatsAppText(body).slice(0, 4000) },
     }),
   });
-  const json = (await res.json().catch(() => ({}))) as { error?: { message?: string }; messages?: Array<{ id?: string }> };
-  if (!res.ok) throw new Error(`WHATSAPP_SEND_FAILED: ${json?.error?.message || res.status}`);
+  const json = (await res.json().catch(() => ({}))) as { error?: WaError; messages?: Array<{ id?: string }> };
+  if (!res.ok) throw new Error(waFailure("WHATSAPP_SEND_FAILED", json?.error, res.status));
   return { externalId: json.messages?.[0]?.id ?? null };
 }
 
@@ -100,8 +119,8 @@ export async function uploadWhatsAppMedia(data: Buffer, mime: string, filename: 
     headers: { authorization: `Bearer ${cfg.accessToken}` },
     body: form,
   });
-  const json = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
-  if (!res.ok || !json.id) throw new Error(`WHATSAPP_UPLOAD_FAILED: ${json?.error?.message || res.status}`);
+  const json = (await res.json().catch(() => ({}))) as { id?: string; error?: WaError };
+  if (!res.ok || !json.id) throw new Error(waFailure("WHATSAPP_UPLOAD_FAILED", json?.error, res.status));
   return json.id;
 }
 
@@ -119,7 +138,7 @@ export async function sendWhatsAppMedia(to: string, mediaId: string, mime: strin
     headers: { authorization: `Bearer ${cfg.accessToken}`, "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const json = (await res.json().catch(() => ({}))) as { error?: { message?: string }; messages?: Array<{ id?: string }> };
-  if (!res.ok) throw new Error(`WHATSAPP_SEND_FAILED: ${json?.error?.message || res.status}`);
+  const json = (await res.json().catch(() => ({}))) as { error?: WaError; messages?: Array<{ id?: string }> };
+  if (!res.ok) throw new Error(waFailure("WHATSAPP_SEND_FAILED", json?.error, res.status));
   return { externalId: json.messages?.[0]?.id ?? null };
 }

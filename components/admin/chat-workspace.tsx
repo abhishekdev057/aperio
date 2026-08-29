@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CheckCheck, LoaderCircle, MessageCircle, Paperclip, Search, Send, AlertCircle } from "lucide-react";
+import { AlertCircle, Check, CheckCheck, LoaderCircle, MessageCircle, Paperclip, Plus, Search, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +75,11 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [contacts, setContacts] = useState<Array<{ userId: string; name: string; email: string; channels: Array<{ platform: string; address: string; handle: string | null }> }>>([]);
+  const [newChannel, setNewChannel] = useState<"whatsapp" | "telegram_userbot">("whatsapp");
+  const [newPeer, setNewPeer] = useState("");
+  const [starting, setStarting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const lastIdRef = useRef<string | null>(null);
@@ -115,6 +120,37 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
       /* keep */
     }
   }, []);
+
+  async function openComposer() {
+    setComposerOpen((v) => !v);
+    if (!contacts.length) {
+      const res = await fetch("/api/v1/admin/chat/contacts").then((r) => r.json()).catch(() => null);
+      if (res?.data?.contacts) setContacts(res.data.contacts);
+    }
+  }
+
+  async function startThread(ch: "whatsapp" | "telegram_userbot", peer: string, name?: string) {
+    if (!peer.trim()) return;
+    setStarting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/v1/admin/chat/contacts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ channel: ch, peer, name }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Could not start the chat.");
+      setComposerOpen(false);
+      setNewPeer("");
+      await loadThreads();
+      setActiveId(json.data.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start the chat.");
+    } finally {
+      setStarting(false);
+    }
+  }
 
   // thread list polling
   useEffect(() => {
@@ -210,10 +246,63 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
       <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)] overflow-hidden rounded-[16px] border bg-[var(--surface)]">
         {/* thread list */}
         <div className="flex min-h-0 flex-col border-r">
-          <div className="relative border-b p-2">
-            <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="h-9 pl-9 text-xs" />
+          <div className="flex items-center gap-1.5 border-b p-2">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="h-9 pl-9 text-xs" />
+            </div>
+            <button onClick={openComposer} title="New message" className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-[var(--primary)] text-white">
+              <Plus size={16} />
+            </button>
           </div>
+
+          {composerOpen && (
+            <div className="border-b bg-[var(--surface-elevated)] p-3 text-xs">
+              <p className="font-semibold">Message a number or handle</p>
+              <div className="mt-2 flex gap-1.5">
+                <select value={newChannel} onChange={(e) => setNewChannel(e.target.value as "whatsapp" | "telegram_userbot")} className="h-8 rounded-[8px] border bg-[var(--surface)] px-2">
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="telegram_userbot">Telegram</option>
+                </select>
+                <Input
+                  value={newPeer}
+                  onChange={(e) => setNewPeer(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && startThread(newChannel, newPeer)}
+                  placeholder={newChannel === "whatsapp" ? "9198XXXXXXXX" : "@username or phone"}
+                  className="h-8 flex-1"
+                />
+                <button onClick={() => startThread(newChannel, newPeer)} disabled={starting || !newPeer.trim()} className="h-8 rounded-[8px] bg-[var(--primary)] px-2.5 font-semibold text-white disabled:opacity-50">
+                  {starting ? <LoaderCircle size={13} className="animate-spin" /> : "Start"}
+                </button>
+              </div>
+
+              {contacts.length > 0 && (
+                <>
+                  <p className="mt-3 font-semibold text-[var(--muted)]">Linked users</p>
+                  <div className="mt-1.5 max-h-52 space-y-1 overflow-y-auto">
+                    {contacts.map((c) => (
+                      <div key={c.userId} className="rounded-[8px] border bg-[var(--surface)] px-2.5 py-1.5">
+                        <p className="truncate text-[13px] font-medium">{c.name}</p>
+                        <p className="truncate text-[10px] text-[var(--muted)]">{c.email}</p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {c.channels.map((ch) => (
+                            <button
+                              key={ch.platform + ch.address}
+                              onClick={() => startThread(ch.platform === "whatsapp" ? "whatsapp" : "telegram_userbot", ch.handle && ch.platform !== "whatsapp" ? ch.handle : ch.address, c.name)}
+                              className="rounded-md bg-[var(--primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--primary)]"
+                            >
+                              {ch.platform === "whatsapp" ? "WhatsApp" : "Telegram"} →
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="min-h-0 flex-1 overflow-y-auto">
             {threads.map((t) => (
               <button
