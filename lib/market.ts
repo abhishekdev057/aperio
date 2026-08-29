@@ -1,4 +1,5 @@
-import { query } from "@/lib/db";
+import { randomUUID } from "node:crypto";
+import { one, query } from "@/lib/db";
 import type { Importance } from "@/lib/types";
 
 /**
@@ -137,12 +138,16 @@ export async function getMarketOutlook(skillIds: string[], region = "global", ho
     yoyChange: string | null;
     capturedAt: string;
     source: string;
+    sourceId: string | null;
+    weight: string | null;
   } & Record<string, unknown>>(
-    `SELECT skill_id AS "skillId", region, demand_index AS "demandIndex", posting_count AS "postingCount",
-      trend, yoy_change AS "yoyChange", captured_at AS "capturedAt", source
-     FROM market_signals
-     WHERE skill_id = ANY($1::text[]) AND region = $2
-     ORDER BY skill_id, captured_at ASC`,
+    `SELECT ms.skill_id AS "skillId", ms.region, ms.demand_index AS "demandIndex", ms.posting_count AS "postingCount",
+      ms.trend, ms.yoy_change AS "yoyChange", ms.captured_at AS "capturedAt", ms.source,
+      ms.source_id AS "sourceId", COALESCE(src.weight, 1) AS weight
+     FROM market_signals ms
+     LEFT JOIN market_sources src ON src.id = ms.source_id
+     WHERE ms.skill_id = ANY($1::text[]) AND ms.region = $2 AND (src.enabled IS DISTINCT FROM false)
+     ORDER BY ms.skill_id, ms.captured_at ASC`,
     [skillIds, region],
   );
 
@@ -151,7 +156,7 @@ export async function getMarketOutlook(skillIds: string[], region = "global", ho
       connected: false,
       signals: [],
       projections: [],
-      note: "Live market data is not connected. Ingest a job-postings source with scripts/ingest-market.ts to enable demand trends and forecasts.",
+      note: "Live market data is not connected. Configure a job-postings source under Admin → Job market, then ingest with scripts/ingest-market.ts.",
     };
   }
 
@@ -166,21 +171,45 @@ export async function getMarketOutlook(skillIds: string[], region = "global", ho
   const projections: MarketProjection[] = [];
 
   for (const [skillId, history] of bySkill) {
+    // Latest value per source, then a weight-blended demand index.
+    const latestBySource = new Map<string, (typeof history)[number]>();
+    for (const row of history) latestBySource.set(row.sourceId ?? "__none__", row);
+    const latestRows = [...latestBySource.values()];
+    let wSum = 0;
+    let wDemand = 0;
+    for (const row of latestRows) {
+      if (row.demandIndex === null) continue;
+      const w = Number(row.weight ?? 1);
+      wSum += w;
+      wDemand += w * Number(row.demandIndex);
+    }
     const latest = history[history.length - 1];
     signals.push({
       skillId,
       region: latest.region,
-      demandIndex: latest.demandIndex === null ? null : Number(latest.demandIndex),
-      postingCount: latest.postingCount,
+      demandIndex: wSum ? Math.round(wDemand / wSum) : null,
+      postingCount: latestRows.reduce((sum, row) => sum + (row.postingCount ?? 0), 0) || null,
       trend: latest.trend,
       yoyChange: latest.yoyChange === null ? null : Number(latest.yoyChange),
       capturedAt: latest.capturedAt,
-      source: latest.source,
+      source: latestRows.length > 1 ? `${latestRows.length} sources (weighted)` : latest.source,
     });
 
-    const points = history
-      .filter((row) => row.demandIndex !== null)
-      .map((row) => ({ t: new Date(row.capturedAt).getTime(), v: Number(row.demandIndex) }));
+    // Weighted mean per capture date, oldest→newest, for the projection.
+    const byDate = new Map<string, { t: number; wSum: number; wVal: number }>();
+    for (const row of history) {
+      if (row.demandIndex === null) continue;
+      const day = row.capturedAt.slice(0, 10);
+      const w = Number(row.weight ?? 1);
+      const bucket = byDate.get(day) ?? { t: new Date(row.capturedAt).getTime(), wSum: 0, wVal: 0 };
+      bucket.wSum += w;
+      bucket.wVal += w * Number(row.demandIndex);
+      byDate.set(day, bucket);
+    }
+    const points = [...byDate.values()]
+      .filter((b) => b.wSum > 0)
+      .map((b) => ({ t: b.t, v: b.wVal / b.wSum }))
+      .sort((a, b) => a.t - b.t);
     const projected = linearProjection(points, horizonDays);
     if (projected) {
       projections.push({
@@ -199,4 +228,61 @@ export async function getMarketOutlook(skillIds: string[], region = "global", ho
     projections,
     note: `Based on ${rows.length} real observations from job-postings ingestion. Forecasts are a linear projection of past data, not a guarantee.`,
   };
+}
+
+// --- admin: weighted job-market sources -------------------------------------
+
+export interface MarketSource {
+  id: string;
+  name: string;
+  kind: "api" | "agency" | "manual";
+  weight: number;
+  integrationKey: string | null;
+  region: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+  createdAt: string;
+}
+
+export async function listMarketSources() {
+  return query<MarketSource & Record<string, unknown>>(
+    `SELECT s.id, s.name, s.kind, s.weight, s.integration_key AS "integrationKey", s.region, s.enabled,
+       s.config, s.created_at AS "createdAt",
+       (SELECT count(*) FROM market_signals ms WHERE ms.source_id = s.id) AS observations
+     FROM market_sources s ORDER BY s.weight DESC, s.name`,
+  );
+}
+
+export async function saveMarketSource(input: {
+  id?: string;
+  name: string;
+  kind?: MarketSource["kind"];
+  weight?: number;
+  integrationKey?: string | null;
+  region?: string;
+  enabled?: boolean;
+  config?: Record<string, unknown>;
+}) {
+  const id = input.id ?? randomUUID();
+  await query(
+    `INSERT INTO market_sources (id, name, kind, weight, integration_key, region, enabled, config)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+     ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, kind=EXCLUDED.kind, weight=EXCLUDED.weight,
+       integration_key=EXCLUDED.integration_key, region=EXCLUDED.region, enabled=EXCLUDED.enabled, config=EXCLUDED.config`,
+    [
+      id,
+      input.name.slice(0, 120),
+      input.kind ?? "api",
+      Math.max(0, Math.min(10, Number(input.weight ?? 1))),
+      input.integrationKey || null,
+      (input.region ?? "global").slice(0, 40),
+      input.enabled ?? true,
+      JSON.stringify(input.config ?? {}),
+    ],
+  );
+  return one("SELECT * FROM market_sources WHERE id=$1", [id]);
+}
+
+export async function deleteMarketSource(id: string) {
+  await query("DELETE FROM market_sources WHERE id=$1", [id]);
 }

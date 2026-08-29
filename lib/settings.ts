@@ -3,7 +3,14 @@ import "server-only";
 import { one, query } from "@/lib/db";
 import { decryptSecret, encryptSecret, isEncryptionConfigured, maskSecret } from "@/lib/crypto";
 
-export type IntegrationKey = "telegram.bot" | "telegram.userbot" | "whatsapp.cloud" | "whatsapp.twilio";
+export type IntegrationKey =
+  | "telegram.bot"
+  | "telegram.userbot"
+  | "whatsapp.cloud"
+  | "whatsapp.twilio"
+  | "jobs.jsearch"
+  | "jobs.adzuna"
+  | "jobs.generic";
 
 interface FieldDef {
   name: string;
@@ -62,6 +69,35 @@ export const INTEGRATION_SCHEMAS: IntegrationSchema[] = [
       { name: "accountSid", label: "Account SID", secret: false, placeholder: "AC..." },
       { name: "authToken", label: "Auth token", secret: true },
       { name: "fromNumber", label: "From (WhatsApp) number", secret: false, placeholder: "whatsapp:+14155238886" },
+    ],
+  },
+  {
+    key: "jobs.jsearch",
+    title: "Job postings — JSearch (RapidAPI)",
+    description: "Live job-posting counts for the market outlook. Subscribe to JSearch on RapidAPI.",
+    fields: [
+      { name: "rapidApiKey", label: "RapidAPI key", secret: true },
+      { name: "rapidApiHost", label: "RapidAPI host", secret: false, placeholder: "jsearch.p.rapidapi.com" },
+    ],
+  },
+  {
+    key: "jobs.adzuna",
+    title: "Job postings — Adzuna",
+    description: "Adzuna's jobs API. Free tier available at developer.adzuna.com.",
+    fields: [
+      { name: "appId", label: "App ID", secret: false },
+      { name: "appKey", label: "App key", secret: true },
+      { name: "country", label: "Country code", secret: false, placeholder: "in", help: "gb, us, in, …" },
+    ],
+  },
+  {
+    key: "jobs.generic",
+    title: "Job postings — custom endpoint",
+    description: "Any HTTP endpoint your ingestion worker calls. Aperio just stores the credentials.",
+    fields: [
+      { name: "baseUrl", label: "Base URL", secret: false, placeholder: "https://api.example.com" },
+      { name: "apiKey", label: "API key", secret: true, optional: true },
+      { name: "authHeader", label: "Auth header name", secret: false, optional: true, placeholder: "Authorization" },
     ],
   },
 ];

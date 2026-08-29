@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { AnalysisReport } from "@/components/analysis-report";
+import { AnalysisFollowups } from "@/components/analysis-followups";
 import { MarketOutlook } from "@/components/market-outlook";
 import { requirePageUser } from "@/lib/auth";
 import { getMarketOutlook, getRoleLeverage } from "@/lib/market";
@@ -20,6 +21,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       </div>
       <div className="mt-8">
         <AnalysisReport report={report} />
+        <AnalysisFollowups analysisId={report.id} />
         <MarketOutlook leverage={leverage} outlook={outlook} />
       </div>
     </div>

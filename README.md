@@ -60,6 +60,22 @@ Two separated demand signals, neither of which changes a match score:
 
 `/learning` turns the open gaps in a user's latest analysis into a personalized, week-by-week study plan: per-module objective, 1–8 concrete activities, one hands-on project, and a self-verifiable checkpoint, paced to a chosen weekly-hours budget. Gemini generates it against the grounded gap list (no invented course names, URLs, certifications, or promised outcomes); a deterministic plan is built from the same gaps when Gemini is unavailable. Module progress is tracked but, like the roadmap, is not treated as proof of mastery. Tables: `learning_paths`, `learning_path_modules`.
 
+## Skill verification tests
+
+After an analysis, `/history/:id` offers an optional multiple-choice check on that analysis's skills (Gemini-generated, technical + soft). Submitting it writes a verified level per skill into `user_skills` (`source='assessment'`, never over a user-verified row), which the scoring engine trusts above résumé inference, and re-runs the analysis so the score and course recommendations reflect the results. Tables: `skill_assessments`, `skill_assessment_questions`, `skill_assessment_results`.
+
+## Practice (`/practice`)
+
+Timeboxed drill sets for the skills a user lacks — hands-on reps for technical skills, real workplace actions for soft skills (Gemini, with a deterministic fallback). Suggestions come from the latest analysis; each session tracks not-started / in-progress / completed.
+
+## LMS and course recommendations (`/courses`, admin `/admin/lms`)
+
+Admins build courses (title, level, track, covered skill ids, lessons of kind reading/exercise/video/quiz/project) and publish them. Published courses are auto-recommended to each user by how many of their non-strong skills a course covers; users enrol and tick off lessons, and the enrolment rolls to *completed* when every lesson is done. Tables: `courses`, `course_lessons`, `course_enrollments`, `lesson_progress`.
+
+## Admin area (`/admin`)
+
+Email-gated by `ADMIN_EMAILS`. Overview KPIs + charts, searchable users with full per-user dossiers, a filterable activity log (`activity_events`), the LMS, weighted **job-market sources** (`market_sources` — each with a demand weight and an optional linked API credential; blended into the outlook and forecast), and an **Integrations** page that stores all third-party credentials **encrypted in the database** (`integration_settings`, AES-256-GCM via `APP_ENCRYPTION_KEY`) rather than in environment files — Telegram, WhatsApp (Meta Cloud / Twilio), and job-postings APIs (JSearch, Adzuna, custom).
+
 ## Messaging and automated updates
 
 Users can link a channel in **Settings → Connected messaging** and receive automated messages: roadmap reminders, a weekly digest, analysis-ready updates, and an inactivity nudge — each toggle is per-user and off unless a channel is linked.

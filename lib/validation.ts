@@ -58,6 +58,54 @@ export const learningModuleSchema = z.object({
   status: z.enum(["not_started", "in_progress", "completed"]),
 });
 
+export const progressStatusSchema = z.object({
+  status: z.enum(["not_started", "in_progress", "completed"]),
+});
+
+export const assessmentSubmitSchema = z.object({
+  answers: z.array(z.object({ questionId: idSchema, answerIndex: z.number().int().min(0).max(3) })).min(1).max(80),
+});
+
+export const practiceCreateSchema = z.object({
+  skillId: idSchema,
+  analysisId: idSchema.optional().nullable(),
+});
+
+export const courseSaveSchema = z.object({
+  id: idSchema.optional(),
+  title: z.string().trim().min(3).max(160),
+  summary: z.string().trim().max(2000).optional(),
+  level: z.enum(["junior", "mid", "senior", "all"]).optional(),
+  track: z.enum(["technical", "soft", "mixed"]).optional(),
+  skillIds: z.array(idSchema).max(40).optional(),
+  published: z.boolean().optional(),
+  lessons: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        title: z.string().trim().min(1).max(160),
+        kind: z.enum(["reading", "exercise", "video", "quiz", "project"]),
+        content: z.string().max(20000).optional().default(""),
+        resourceUrl: z.string().url().max(500).optional().nullable(),
+        durationMin: z.number().int().min(1).max(600).optional().nullable(),
+        position: z.number().int().min(0).max(500).optional().default(0),
+      }),
+    )
+    .max(60)
+    .optional(),
+});
+
+export const marketSourceSchema = z.object({
+  id: idSchema.optional(),
+  name: z.string().trim().min(2).max(120),
+  kind: z.enum(["api", "agency", "manual"]).optional(),
+  weight: z.coerce.number().min(0).max(10).optional(),
+  integrationKey: z.string().max(60).optional().nullable(),
+  region: z.string().trim().max(40).optional(),
+  enabled: z.boolean().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+});
+
 export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),

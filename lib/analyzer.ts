@@ -21,6 +21,7 @@ interface ExistingSkillRow extends Record<string, unknown> {
   skillId: string;
   level: number;
   confidence: string;
+  source: string;
   evidence: Array<{ quote: string; source: string }>;
   userVerified: boolean;
 }
@@ -317,7 +318,7 @@ export async function runAnalysis(
   if (!requirements.length) throw new Error("ROLE_REQUIREMENTS_MISSING");
 
   const existing = await query<ExistingSkillRow>(
-    `SELECT skill_id AS "skillId", level, confidence, evidence, user_verified AS "userVerified" FROM user_skills WHERE user_id=$1`,
+    `SELECT skill_id AS "skillId", level, confidence, source, evidence, user_verified AS "userVerified" FROM user_skills WHERE user_id=$1`,
     [userId],
   );
   const bySkill = new Map(existing.map((item) => [item.skillId, item]));
@@ -346,11 +347,12 @@ export async function runAnalysis(
 
     const candidates: EvidenceResult[] = [];
     if (saved && saved.level > 0) {
+      const fromAssessment = saved.source === "assessment";
       candidates.push({
         level: saved.level,
         confidence: Number(saved.confidence ?? 0.5),
         evidence: saved.evidence ?? [],
-        basis: "Saved from an earlier analysis",
+        basis: fromAssessment ? "Verified by a skills test" : "Saved from an earlier analysis",
         implied: false,
       });
     }

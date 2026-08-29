@@ -47,6 +47,25 @@ or:
 - `POST /learning-paths` — `{ analysisId?, weeklyHours }`; builds a new path from the open gaps of the given (or latest) analysis, archiving any previous active path. `422 NO_GAPS` / `422 ANALYSIS_NOT_FOUND` when there is nothing to plan.
 - `PATCH /learning-paths/modules/:id` — `{ status: "not_started" | "in_progress" | "completed" }`; updates a module owned through the user's path.
 
+## Skill verification tests
+
+- `POST /assessments` — `{ analysisId? }` builds an optional multiple-choice check (Gemini) on the skills of the given/latest analysis. `GET /assessments` returns the latest.
+- `GET /assessments/:id` — the test; correct answers are withheld until it is submitted.
+- `POST /assessments/:id/submit` — `{ answers: [{ questionId, answerIndex }] }`. Grades it, writes per-skill verified levels into `user_skills` (`source='assessment'`, only over non-user-verified rows), and re-runs the linked analysis so the score reflects the results. Returns `{ score, perSkill, newAnalysisId }`.
+
+## Practice
+
+- `GET /practice` — the user's practice sessions plus suggested skills from the latest analysis.
+- `POST /practice` — `{ skillId, analysisId? }` generates a timeboxed drill set (Gemini; deterministic fallback).
+- `PATCH /practice/:id` — `{ status }`.
+
+## Courses (LMS)
+
+- `GET /courses` — `{ recommended, enrolled }`. Recommendations are published courses whose `skill_ids` overlap the user's non-strong skills, ranked by overlap.
+- `GET /courses/:id` — learner view with per-lesson progress.
+- `POST /courses/:id/enroll` — enrol.
+- `PATCH /courses/lessons/:id` — `{ status }`; rolls the enrolment to `completed` when every lesson is done.
+
 ## Messaging and notifications
 
 - `GET /integrations` — linked channels, notification toggles, and which providers are configured.
@@ -56,6 +75,15 @@ or:
 - `POST /integrations/whatsapp/link` — `501 NOT_IMPLEMENTED` (provider not wired yet).
 - `PATCH /notifications/preferences` — `{ notifyRoadmap?, notifyWeeklyDigest?, notifyAnalysis?, notifyInactivity? }`.
 - `GET|POST /cron/notifications?job=all|roadmap|weekly|inactivity` — batch sender; requires `Authorization: Bearer $CRON_SECRET` (or `?secret=`). Called by Vercel Cron.
+
+## Admin
+
+All under `/admin`, require an admin session (`ADMIN_EMAILS`).
+
+- `GET|PUT /admin/integrations/:key`, `POST /admin/integrations/:key/test` — encrypted credential store for Telegram, Telegram user bot, WhatsApp (Meta Cloud / Twilio), and job-postings APIs (JSearch, Adzuna, custom).
+- `GET /admin/users`, `GET` per-user dossier via the page; `GET /admin/activity` — filterable event log.
+- `GET|POST /admin/courses`, `GET|DELETE /admin/courses/:id` — LMS course + lesson CRUD.
+- `GET|POST /admin/market/sources`, `DELETE /admin/market/sources/:id` — weighted job-market sources; each can link an integration key for API credentials.
 
 ## Roadmaps
 

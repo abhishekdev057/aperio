@@ -79,6 +79,28 @@ const learningPathSchema = z.object({
 
 export type GeminiLearningPath = z.infer<typeof learningPathSchema>;
 
+const assessmentSchema = z.object({
+  questions: z.array(z.object({
+    skillId: z.string().max(100),
+    prompt: z.string().min(12).max(600),
+    options: z.array(z.string().min(1).max(240)).length(4),
+    correctIndex: z.number().int().min(0).max(3),
+  })).min(1).max(40),
+});
+export type GeminiAssessment = z.infer<typeof assessmentSchema>;
+
+const practiceSchema = z.object({
+  title: z.string().min(4).max(140),
+  focus: z.string().min(10).max(400),
+  drills: z.array(z.object({
+    title: z.string().min(3).max(140),
+    instruction: z.string().min(10).max(600),
+    timeboxMinutes: z.number().int().min(5).max(240),
+  })).min(2).max(8),
+  selfCheck: z.string().min(10).max(500),
+});
+export type GeminiPractice = z.infer<typeof practiceSchema>;
+
 const resumeResponseSchema = {
   type: Type.OBJECT,
   required: ["isResume", "documentType", "confidence", "rejectionReason", "candidateName", "professionalHeadline", "summary", "extractedText", "skills", "experience", "education", "projects", "certifications", "visualSignals", "warnings"],
@@ -124,6 +146,30 @@ const learningPathResponseSchema = {
       activities: { type: Type.ARRAY, items: { type: Type.STRING } },
       project: { type: Type.STRING }, checkpoint: { type: Type.STRING },
     } } },
+  },
+};
+
+const assessmentResponseSchema = {
+  type: Type.OBJECT,
+  required: ["questions"],
+  properties: {
+    questions: { type: Type.ARRAY, items: { type: Type.OBJECT, required: ["skillId", "prompt", "options", "correctIndex"], properties: {
+      skillId: { type: Type.STRING }, prompt: { type: Type.STRING },
+      options: { type: Type.ARRAY, items: { type: Type.STRING } }, correctIndex: { type: Type.INTEGER },
+    } } },
+  },
+};
+
+const practiceResponseSchema = {
+  type: Type.OBJECT,
+  required: ["title", "focus", "drills", "selfCheck"],
+  properties: {
+    title: { type: Type.STRING },
+    focus: { type: Type.STRING },
+    drills: { type: Type.ARRAY, items: { type: Type.OBJECT, required: ["title", "instruction", "timeboxMinutes"], properties: {
+      title: { type: Type.STRING }, instruction: { type: Type.STRING }, timeboxMinutes: { type: Type.INTEGER },
+    } } },
+    selfCheck: { type: Type.STRING },
   },
 };
 
@@ -314,4 +360,71 @@ ${JSON.stringify(input)}`;
   if (!modules.length) throw new Error("GEMINI_EMPTY_LEARNING_PATH");
   const totalWeeks = Math.max(...modules.map((item) => item.weekEnd));
   return { ...parsed, modules, totalWeeks };
+}
+
+export async function generateAssessmentQuestions(input: {
+  roleTitle: string;
+  experienceLevel: ExperienceLevel;
+  perSkill: number;
+  skills: Array<{ skillId: string; name: string; skillType?: string; targetLevel: number }>;
+}) {
+  const prompt = `Write a short skills-check for these skills. Use only the exact supplied skillId values.
+Rules:
+- Exactly ${input.perSkill} multiple-choice questions per skill, 4 options each, one correct (correctIndex 0-3).
+- Questions test genuine working knowledge at a ${input.experienceLevel} level for a ${input.roleTitle}: applied judgement and common pitfalls, not trivia or memorised syntax.
+- For skillType "soft", use realistic workplace scenarios ("what is the best next step when...").
+- Options must be plausible and mutually exclusive. No "all of the above". Keep each option under 30 words.
+- Do not reference the candidate, their résumé, or any score.
+
+${JSON.stringify(input.skills)}`;
+  const parsed = await runWithGeminiFallback("assessment", async (ai, model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction: "You are Aperio's assessment writer. Produce fair, unambiguous questions grounded in the skill, never trick questions.",
+        maxOutputTokens: 14_000,
+        responseMimeType: "application/json",
+        responseSchema: assessmentResponseSchema,
+      },
+    });
+    return parseModelJson(response.text, assessmentSchema);
+  });
+  const allowed = new Set(input.skills.map((s) => s.skillId));
+  const questions = parsed.questions
+    .filter((q) => allowed.has(q.skillId) && q.options.length === 4 && q.correctIndex >= 0 && q.correctIndex < 4);
+  if (!questions.length) throw new Error("GEMINI_EMPTY_ASSESSMENT");
+  return { questions };
+}
+
+export async function generatePracticeSession(input: {
+  skillName: string;
+  skillType: "technical" | "soft";
+  currentLevel: number;
+  targetLevel: number;
+  roleTitle: string;
+}) {
+  const prompt = `Design one focused practice session to move "${input.skillName}" from level ${input.currentLevel} toward ${input.targetLevel} for a ${input.roleTitle}.
+Rules:
+- 2-8 drills, each with a title, a specific instruction, and a realistic timebox in minutes.
+- ${input.skillType === "soft"
+      ? "Drills are workplace actions: prepare and run a short conversation, write a one-page decision doc, ask for and act on feedback, reflect in writing."
+      : "Drills are hands-on: implement, break, fix, measure, explain. No course links or purchases."}
+- selfCheck: how the learner knows the session worked.
+- Nothing fabricated — no course names, URLs, certifications, or guarantees.
+
+Return JSON only.`;
+  return runWithGeminiFallback("practice session", async (ai, model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction: "You are Aperio's practice designer. Output is concrete drills grounded in the skill.",
+        maxOutputTokens: 6_000,
+        responseMimeType: "application/json",
+        responseSchema: practiceResponseSchema,
+      },
+    });
+    return parseModelJson(response.text, practiceSchema);
+  });
 }
