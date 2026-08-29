@@ -82,50 +82,56 @@ export async function POST(request: Request) {
     }
 
     for (const msg of value.messages ?? []) {
-      const from = String(msg.from || "").replace(/\D/g, "");
-      if (!from || !msg.type) continue;
-      const kind = KIND_MAP[msg.type] ?? "system";
-      const mediaObj = (msg.image || msg.audio || msg.video || msg.document || msg.voice || msg.sticker) as WaMediaObj | undefined;
-      const bodyText = msg.text?.body ?? mediaObj?.caption ?? null;
-      const at = msg.timestamp ? new Date(Number(msg.timestamp) * 1000) : new Date();
-
-      const threadId = await upsertThread({ channel: "whatsapp", peerId: from, peerName: nameByWaId.get(from) ?? `+${from}` });
-      await recordMessage({
-        threadId,
-        direction: "in",
-        externalId: msg.id ?? null,
-        kind: msg.type === "voice" ? "voice" : kind,
-        text: bodyText,
-        mediaMime: mediaObj?.mime_type ?? null,
-        mediaName: mediaObj?.filename ?? null,
-        providerRef: mediaObj?.id ? { waMediaId: mediaObj.id } : null,
-        senderName: nameByWaId.get(from) ?? `+${from}`,
-        status: "delivered",
-        at,
-      });
-
-      // Link-code flow (unchanged) for plain text that looks like a code.
-      const code = kind === "text" ? parseLinkCode(bodyText ?? undefined) : null;
-      if (code) {
-        const rows = await query<{ id: string; userId: string } & Record<string, unknown>>(
-          `UPDATE messaging_channels
-           SET status='linked', address=$1, handle=$2, link_code=NULL, link_code_expires_at=NULL, verified_at=now(), updated_at=now()
-           WHERE platform='whatsapp' AND link_code=$3 AND (link_code_expires_at IS NULL OR link_code_expires_at > now())
-           RETURNING id, user_id AS "userId"`,
-          [from, `+${from}`, code],
-        );
-        if (rows[0]) {
-          await query(
-            `UPDATE messaging_channels SET status='disabled', address=NULL, updated_at=now()
-             WHERE platform='whatsapp' AND address=$1 AND id <> $2`,
-            [from, rows[0].id],
-          );
-          await logActivity({ action: "channel.link", userId: rows[0].userId, entityType: "channel", entityId: rows[0].id, metadata: { platform: "whatsapp" }, request });
-          await sendWhatsAppText(from, "*Aperio linked.* You'll get roadmap reminders, a weekly digest, and analysis updates here. Manage them in Settings.").catch(() => {});
-        }
+      try {
+        await handleInbound(msg, nameByWaId, request);
+      } catch (error) {
+        console.error("whatsapp inbound handling failed", error instanceof Error ? error.message : error);
       }
     }
   }
 
   return NextResponse.json({ ok: true });
+}
+
+async function handleInbound(msg: WaMessage, nameByWaId: Map<string | undefined, string | undefined>, request: Request) {
+  const from = String(msg.from || "").replace(/\D/g, "");
+  if (!from || !msg.type) return;
+  const kind = KIND_MAP[msg.type] ?? "system";
+  const mediaObj = (msg.image || msg.audio || msg.video || msg.document || msg.voice || msg.sticker) as WaMediaObj | undefined;
+  const bodyText = msg.text?.body ?? mediaObj?.caption ?? null;
+  const at = msg.timestamp ? new Date(Number(msg.timestamp) * 1000) : new Date();
+
+  const threadId = await upsertThread({ channel: "whatsapp", peerId: from, peerName: nameByWaId.get(from) ?? `+${from}` });
+  await recordMessage({
+    threadId,
+    direction: "in",
+    externalId: msg.id ?? null,
+    kind: msg.type === "voice" ? "voice" : kind,
+    text: bodyText,
+    mediaMime: mediaObj?.mime_type ?? null,
+    mediaName: mediaObj?.filename ?? null,
+    providerRef: mediaObj?.id ? { waMediaId: mediaObj.id } : null,
+    senderName: nameByWaId.get(from) ?? `+${from}`,
+    status: "delivered",
+    at,
+  });
+
+  // Link-code flow for plain text that looks like a code.
+  const code = kind === "text" ? parseLinkCode(bodyText ?? undefined) : null;
+  if (!code) return;
+  const rows = await query<{ id: string; userId: string } & Record<string, unknown>>(
+    `UPDATE messaging_channels
+     SET status='linked', address=$1, handle=$2, link_code=NULL, link_code_expires_at=NULL, verified_at=now(), updated_at=now()
+     WHERE platform='whatsapp' AND link_code=$3 AND (link_code_expires_at IS NULL OR link_code_expires_at > now())
+     RETURNING id, user_id AS "userId"`,
+    [from, `+${from}`, code],
+  );
+  if (!rows[0]) return;
+  await query(
+    `UPDATE messaging_channels SET status='disabled', address=NULL, updated_at=now()
+     WHERE platform='whatsapp' AND address=$1 AND id <> $2`,
+    [from, rows[0].id],
+  );
+  await logActivity({ action: "channel.link", userId: rows[0].userId, entityType: "channel", entityId: rows[0].id, metadata: { platform: "whatsapp" }, request });
+  await sendWhatsAppText(from, "*Aperio linked.* You'll get roadmap reminders, a weekly digest, and analysis updates here. Manage them in Settings.").catch(() => {});
 }
