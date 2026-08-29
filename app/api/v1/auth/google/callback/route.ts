@@ -17,7 +17,8 @@ export const maxDuration = 30;
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const back = (path: string) => NextResponse.redirect(new URL(path, process.env.APP_ORIGIN?.trim() || url.origin));
+  const base = process.env.APP_ORIGIN?.trim() || url.origin;
+  const back = (path: string) => NextResponse.redirect(new URL(path, base));
 
   const cookieStore = await cookies();
   const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
@@ -30,19 +31,32 @@ export async function GET(request: Request) {
   if (url.searchParams.get("error")) return back("/login?error=google_denied");
   if (!code || !state || !expectedState || state !== expectedState) return back("/login?error=google_state");
 
+  const redirectUri = googleRedirectUri(url.origin);
+
+  let accessToken: string;
   try {
-    const redirectUri = googleRedirectUri(url.origin);
-    const token = await exchangeGoogleCode(code, redirectUri);
-    const profile = await fetchGoogleProfile(token.access_token);
-    if (!isGoogleEmailVerified(profile)) return back("/login?error=google_unverified");
+    accessToken = (await exchangeGoogleCode(code, redirectUri)).access_token;
+  } catch (error) {
+    console.error("Google OAuth: token exchange failed", { redirectUri, message: error instanceof Error ? error.message : error });
+    return back("/login?error=google_token");
+  }
 
-    const email = profile.email.toLowerCase();
-    const fullName = (profile.name?.trim() || email.split("@")[0]).slice(0, 80);
-    const picture = profile.picture ?? null;
+  let profile;
+  try {
+    profile = await fetchGoogleProfile(accessToken);
+  } catch (error) {
+    console.error("Google OAuth: userinfo failed", error instanceof Error ? error.message : error);
+    return back("/login?error=google_profile");
+  }
+  if (!isGoogleEmailVerified(profile)) return back("/login?error=google_unverified");
 
-    let userId: string;
-    let isNewUser = false;
+  const email = profile.email.toLowerCase();
+  const fullName = (profile.name?.trim() || email.split("@")[0]).slice(0, 80);
+  const picture = profile.picture ?? null;
 
+  let userId: string;
+  let isNewUser = false;
+  try {
     const byGoogleId = await one<{ id: string }>("SELECT id FROM users WHERE google_id=$1", [profile.sub]);
     if (byGoogleId) {
       userId = byGoogleId.id;
@@ -67,11 +81,17 @@ export async function GET(request: Request) {
         ]);
       }
     }
-
-    await createSession(userId);
-    return back(isNewUser ? "/onboarding" : "/overview");
   } catch (error) {
-    console.error("Google OAuth callback failed", error instanceof Error ? error.message : "unknown error");
-    return back("/login?error=google_failed");
+    console.error("Google OAuth: account store failed (has migration 003 been applied?)", error instanceof Error ? error.message : error);
+    return back("/login?error=google_store");
   }
+
+  try {
+    await createSession(userId);
+  } catch (error) {
+    console.error("Google OAuth: session creation failed", error instanceof Error ? error.message : error);
+    return back("/login?error=google_session");
+  }
+
+  return back(isNewUser ? "/onboarding" : "/overview");
 }

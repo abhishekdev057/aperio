@@ -11,6 +11,10 @@ const oauthErrors: Record<string, string> = {
   google_denied: "Google sign-in was cancelled.",
   google_state: "That Google sign-in attempt expired. Please try again.",
   google_unverified: "Your Google account email is not verified.",
+  google_token: "Google rejected the sign-in (check the redirect URI and client secret). Please try again.",
+  google_profile: "We could not read your Google profile. Please try again.",
+  google_store: "Sign-in succeeded but your account could not be saved. Please try again shortly.",
+  google_session: "We could not start your session. Please try again.",
   google_failed: "We could not complete Google sign-in. Please try again.",
 };
 
