@@ -185,6 +185,195 @@ const diagnosticsResponseSchema = {
   },
 };
 
+// --- admin AI authoring: course topics, full courses, practice question sets ---
+
+const courseTopicsSchema = z.object({
+  topics: z.array(z.object({
+    title: z.string().min(4).max(140),
+    niche: z.string().min(2).max(60),
+    level: z.enum(["junior", "mid", "senior", "all"]),
+    track: z.enum(["technical", "soft", "mixed"]),
+    rationale: z.string().min(10).max(400),
+    skills: z.array(z.string().min(1).max(80)).max(12),
+  })).min(1).max(12),
+});
+export type GeminiCourseTopics = z.infer<typeof courseTopicsSchema>;
+
+const courseTopicsResponseSchema = {
+  type: Type.OBJECT,
+  required: ["topics"],
+  properties: {
+    topics: { type: Type.ARRAY, items: { type: Type.OBJECT, required: ["title", "niche", "level", "track", "rationale", "skills"], properties: {
+      title: { type: Type.STRING }, niche: { type: Type.STRING },
+      level: { type: Type.STRING, enum: ["junior", "mid", "senior", "all"] },
+      track: { type: Type.STRING, enum: ["technical", "soft", "mixed"] },
+      rationale: { type: Type.STRING },
+      skills: { type: Type.ARRAY, items: { type: Type.STRING } },
+    } } },
+  },
+};
+
+const generatedCourseSchema = z.object({
+  title: z.string().min(4).max(160),
+  summary: z.string().min(20).max(1200),
+  level: z.enum(["junior", "mid", "senior", "all"]),
+  track: z.enum(["technical", "soft", "mixed"]),
+  skills: z.array(z.string().min(1).max(80)).max(20),
+  lessons: z.array(z.object({
+    title: z.string().min(3).max(160),
+    kind: z.enum(["reading", "exercise", "project", "quiz"]),
+    content: z.string().min(60).max(9000),
+    durationMin: z.number().int().min(5).max(240),
+  })).min(3).max(14),
+});
+export type GeminiGeneratedCourse = z.infer<typeof generatedCourseSchema>;
+
+const generatedCourseResponseSchema = {
+  type: Type.OBJECT,
+  required: ["title", "summary", "level", "track", "skills", "lessons"],
+  properties: {
+    title: { type: Type.STRING },
+    summary: { type: Type.STRING },
+    level: { type: Type.STRING, enum: ["junior", "mid", "senior", "all"] },
+    track: { type: Type.STRING, enum: ["technical", "soft", "mixed"] },
+    skills: { type: Type.ARRAY, items: { type: Type.STRING } },
+    lessons: { type: Type.ARRAY, items: { type: Type.OBJECT, required: ["title", "kind", "content", "durationMin"], properties: {
+      title: { type: Type.STRING },
+      kind: { type: Type.STRING, enum: ["reading", "exercise", "project", "quiz"] },
+      content: { type: Type.STRING },
+      durationMin: { type: Type.INTEGER },
+    } } },
+  },
+};
+
+const questionSetSchema = z.object({
+  title: z.string().min(4).max(140),
+  description: z.string().min(10).max(500),
+  questions: z.array(z.object({
+    prompt: z.string().min(12).max(600),
+    options: z.array(z.string().min(1).max(240)).length(4),
+    correctIndex: z.number().int().min(0).max(3),
+    explanation: z.string().min(10).max(600),
+  })).min(3).max(30),
+});
+export type GeminiQuestionSet = z.infer<typeof questionSetSchema>;
+
+const questionSetResponseSchema = {
+  type: Type.OBJECT,
+  required: ["title", "description", "questions"],
+  properties: {
+    title: { type: Type.STRING },
+    description: { type: Type.STRING },
+    questions: { type: Type.ARRAY, items: { type: Type.OBJECT, required: ["prompt", "options", "correctIndex", "explanation"], properties: {
+      prompt: { type: Type.STRING },
+      options: { type: Type.ARRAY, items: { type: Type.STRING } },
+      correctIndex: { type: Type.INTEGER },
+      explanation: { type: Type.STRING },
+    } } },
+  },
+};
+
+/** Suggest course topics for the admin LMS, optionally seeded by a focus area. */
+export async function suggestCourseTopics(input: { focus?: string; existingTitles?: string[]; roleTitles?: string[] }) {
+  const prompt = `Propose 8 distinct, high-value courses Aperio could offer to help people close real career skill gaps.
+${input.focus ? `Focus area: ${input.focus}.` : "Cover a useful spread across engineering, data, product, and professional/soft skills."}
+${input.roleTitles?.length ? `Roles users are targeting: ${input.roleTitles.slice(0, 20).join(", ")}.` : ""}
+${input.existingTitles?.length ? `Do NOT repeat these existing courses: ${input.existingTitles.slice(0, 40).join("; ")}.` : ""}
+Rules:
+- Each topic: a concrete title, a one-word/short niche (e.g. "Frontend", "Data", "Backend", "Product", "Communication", "Leadership"), a level, a track (technical | soft | mixed), a short rationale, and 3-8 skill names it builds.
+- Titles must be specific ("Designing REST APIs that scale", not "Backend 101"). No vendor courses, no certifications, no prices.
+Return JSON only.`;
+  return runWithGeminiFallback("course topics", async (ai, model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction: "You are Aperio's curriculum planner. Suggestions are practical and skill-gap oriented.",
+        maxOutputTokens: 6_000,
+        responseMimeType: "application/json",
+        responseSchema: courseTopicsResponseSchema,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+    return parseModelJson(response.text, courseTopicsSchema);
+  });
+}
+
+/** Generate a full course — metadata + real, teachable lesson content. */
+export async function generateCourse(input: {
+  topic: string;
+  level?: "junior" | "mid" | "senior" | "all";
+  track?: "technical" | "soft" | "mixed";
+  lessonCount?: number;
+  audience?: string;
+  knownSkills?: string[];
+}) {
+  const lessonCount = Math.max(4, Math.min(12, input.lessonCount ?? 7));
+  const prompt = `Write a complete, self-contained course on: "${input.topic}".
+${input.audience ? `Audience: ${input.audience}.` : ""}
+Target level: ${input.level ?? "mid"}. Track: ${input.track ?? "technical"}.
+${input.knownSkills?.length ? `Where relevant, map to these known skill names (use the exact spelling): ${input.knownSkills.slice(0, 60).join(", ")}.` : ""}
+Rules:
+- Produce exactly ${lessonCount} lessons in a sensible learning order (foundations first).
+- Each lesson "content" is the actual teaching material the learner reads: 150-320 words of clear prose in simple Markdown (short paragraphs, at most one short list, fenced code only where it genuinely helps). Explain the idea, give a concrete example, and end with a 1-2 sentence "Try this" task. No external links, no fabricated tools, courses, prices, or statistics.
+- "kind" is one of reading | exercise | project | quiz. Use "project" for a build-something lesson, "quiz" only for a self-check lesson whose content lists 3-5 questions with answers, "exercise" for a hands-on drill, otherwise "reading".
+- durationMin is a realistic read/do time (5-45 for reading/exercise/quiz, up to 180 for a project).
+- "skills" (3-10) are the skill names this course builds. "summary" is 2-3 sentences on what the learner will be able to do.
+Return JSON only.`;
+  const parsed = await runWithGeminiFallback("course generation", async (ai, model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction: "You are Aperio's course author. Lessons are accurate, practical, and free of fabricated references.",
+        maxOutputTokens: 20_000,
+        responseMimeType: "application/json",
+        responseSchema: generatedCourseResponseSchema,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+    return parseModelJson(response.text, generatedCourseSchema);
+  });
+  if (!parsed.lessons.length) throw new Error("GEMINI_EMPTY_COURSE");
+  return parsed;
+}
+
+/** Generate one practice question set (MCQs with explanations) for a niche/topic. */
+export async function generateQuestionSet(input: {
+  topic: string;
+  niche?: string;
+  level?: "junior" | "mid" | "senior" | "all";
+  count?: number;
+}) {
+  const count = Math.max(5, Math.min(25, input.count ?? 10));
+  const prompt = `Write a ${count}-question multiple-choice practice set on: "${input.topic}".
+Niche: ${input.niche ?? "General"}. Difficulty: ${input.level ?? "mid"} level.
+Rules:
+- Exactly ${count} questions. 4 options each, exactly one correct (correctIndex 0-3).
+- Test applied understanding and common mistakes at this level — judgement, trade-offs, debugging — not trivia or memorised syntax.
+- Options are plausible and mutually exclusive; no "all/none of the above"; each option under 30 words.
+- "explanation" (1-3 sentences) says why the correct option is right and, briefly, why a tempting wrong one is wrong.
+- "title" names the set; "description" is one sentence on what it covers. No references to any person or résumé.
+Return JSON only.`;
+  const parsed = await runWithGeminiFallback("question set", async (ai, model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction: "You are Aperio's assessment writer. Questions are fair, unambiguous, and grounded in the topic.",
+        maxOutputTokens: 16_000,
+        responseMimeType: "application/json",
+        responseSchema: questionSetResponseSchema,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+    return parseModelJson(response.text, questionSetSchema);
+  });
+  const questions = parsed.questions.filter((q) => q.options.length === 4 && q.correctIndex >= 0 && q.correctIndex < 4);
+  if (questions.length < 3) throw new Error("GEMINI_EMPTY_QUESTION_SET");
+  return { ...parsed, questions };
+}
+
 function getGeminiApiKey() {
   return process.env.GEMINI_API_KEY?.trim() || process.env.GEMINI_KEY?.trim() || "";
 }

@@ -1,9 +1,138 @@
 "use client";
 
 import { useState } from "react";
-import { Check, LoaderCircle, Plus, Trash2, X } from "lucide-react";
+import { Check, LoaderCircle, Plus, Sparkles, Trash2, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
+
+type Topic = { title: string; niche: string; level: string; track: string; rationale: string; skills: string[] };
+
+function AiPanel({ onDraft }: { onDraft: (course: Record<string, unknown>, note: string) => void }) {
+  const [topic, setTopic] = useState("");
+  const [level, setLevel] = useState("mid");
+  const [track, setTrack] = useState("technical");
+  const [lessonCount, setLessonCount] = useState(7);
+  const [audience, setAudience] = useState("");
+  const [focus, setFocus] = useState("");
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [busy, setBusy] = useState<"" | "suggest" | "generate">("");
+  const [error, setError] = useState("");
+
+  async function suggest() {
+    setBusy("suggest");
+    setError("");
+    try {
+      const res = await fetch("/api/v1/admin/courses/suggest-topics", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ focus: focus.trim() || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Could not suggest topics.");
+      setTopics(json.data.topics as Topic[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not suggest topics.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function generate(seed?: Topic) {
+    const t = seed?.title ?? topic.trim();
+    if (!t) return;
+    setBusy("generate");
+    setError("");
+    try {
+      const res = await fetch("/api/v1/admin/courses/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          topic: t,
+          level: seed?.level ?? level,
+          track: seed?.track ?? track,
+          lessonCount,
+          audience: audience.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Generation failed.");
+      const matched = Number(json.data.matchedSkillCount ?? 0);
+      const named = (json.data.skillNames as string[] | undefined)?.length ?? 0;
+      onDraft(
+        json.data.course as Record<string, unknown>,
+        `Draft generated — ${matched}/${named} skills matched to the catalog. Review the lessons, set the skills, then publish.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <div className="rounded-[16px] border border-[var(--primary)]/30 bg-[var(--primary-soft)]/40 p-5">
+      <div className="flex items-center gap-2">
+        <Wand2 size={16} className="text-[var(--primary)]" />
+        <h2 className="text-sm font-semibold">Author with Gemini</h2>
+      </div>
+      <p className="mt-1 text-xs text-[var(--muted)]">Generate a full course — metadata and real lesson content — as a draft you review and publish.</p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-medium">Course topic</span>
+          <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Designing REST APIs that scale" />
+        </label>
+        <label className="block"><span className="mb-1 block text-xs font-medium">Level</span>
+          <select value={level} onChange={(e) => setLevel(e.target.value)} className="h-10 w-full rounded-[9px] border bg-[var(--surface-elevated)] px-3 text-sm">
+            {["junior", "mid", "senior", "all"].map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </label>
+        <label className="block"><span className="mb-1 block text-xs font-medium">Track</span>
+          <select value={track} onChange={(e) => setTrack(e.target.value)} className="h-10 w-full rounded-[9px] border bg-[var(--surface-elevated)] px-3 text-sm">
+            {["technical", "soft", "mixed"].map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="block"><span className="mb-1 block text-xs font-medium">Lessons</span>
+          <Input type="number" min={4} max={12} value={lessonCount} onChange={(e) => setLessonCount(Math.max(4, Math.min(12, Number(e.target.value) || 7)))} />
+        </label>
+        <label className="block"><span className="mb-1 block text-xs font-medium">Audience (optional)</span>
+          <Input value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="e.g. self-taught devs moving to backend" />
+        </label>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button size="sm" onClick={() => generate()} disabled={Boolean(busy) || !topic.trim()}>
+          {busy === "generate" ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}Generate course
+        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Input value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="Suggest topics about… (optional)" className="h-9 w-56" />
+          <Button size="sm" variant="secondary" onClick={suggest} disabled={Boolean(busy)}>
+            {busy === "suggest" ? <LoaderCircle size={13} className="animate-spin" /> : <Wand2 size={13} />}Suggest
+          </Button>
+        </div>
+      </div>
+
+      {error && <p className="mt-2 text-xs text-[var(--critical)]">{error}</p>}
+
+      {topics.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {topics.map((tp, i) => (
+            <div key={i} className="flex items-start gap-3 rounded-[10px] border bg-[var(--surface)] p-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{tp.title}</p>
+                <p className="text-[11px] text-[var(--muted)]">{tp.niche} · {tp.level} · {tp.track} — {tp.rationale}</p>
+                {tp.skills.length > 0 && <p className="mt-1 text-[11px] text-[var(--muted-strong)]">Skills: {tp.skills.join(", ")}</p>}
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => generate(tp)} disabled={Boolean(busy)}>
+                {busy === "generate" ? <LoaderCircle size={13} className="animate-spin" /> : "Generate"}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type SkillOption = { id: string; name: string; skillType: string };
 type CourseRow = Record<string, unknown>;
@@ -134,6 +263,15 @@ export function CourseManager({ initialCourses, skills }: { initialCourses: Cour
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
   const [creating, setCreating] = useState(false);
   const [loadingId, setLoadingId] = useState("");
+  const [aiNote, setAiNote] = useState("");
+
+  function openDraft(course: Record<string, unknown>, note: string) {
+    setCourses((c) => (c.some((x) => x.id === course.id) ? c : [{ ...course, lessons: Array.isArray((course as { lessons?: unknown[] }).lessons) ? (course as { lessons: unknown[] }).lessons.length : 0, enrollments: 0 }, ...c]));
+    setEditing(course);
+    setCreating(false);
+    setAiNote(note);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function openEdit(id: string) {
     setLoadingId(id);
@@ -163,6 +301,7 @@ export function CourseManager({ initialCourses, skills }: { initialCourses: Cour
     });
     setEditing(null);
     setCreating(false);
+    setAiNote("");
   }
 
   return (
@@ -175,12 +314,18 @@ export function CourseManager({ initialCourses, skills }: { initialCourses: Cour
         {!creating && !editing && <Button size="sm" onClick={() => { setCreating(true); setEditing(null); }}><Plus size={14} />New course</Button>}
       </div>
 
+      {!creating && !editing && <AiPanel onDraft={openDraft} />}
+
+      {aiNote && (creating || editing) && (
+        <p className="rounded-[10px] border border-[var(--primary)]/30 bg-[var(--primary-soft)]/40 px-3 py-2 text-xs text-[var(--muted-strong)]">{aiNote}</p>
+      )}
+
       {(creating || editing) && (
         <Editor
           skills={skills}
           initial={editing ?? undefined}
           onSaved={afterSave}
-          onCancel={() => { setEditing(null); setCreating(false); }}
+          onCancel={() => { setEditing(null); setCreating(false); setAiNote(""); }}
         />
       )}
 

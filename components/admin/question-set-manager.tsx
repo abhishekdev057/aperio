@@ -1,0 +1,157 @@
+"use client";
+
+import { useState } from "react";
+import { ChevronDown, ChevronRight, LoaderCircle, Sparkles, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+type SetRow = Record<string, unknown>;
+type Item = { id: string; prompt: string; options: string[]; correctIndex: number; explanation: string; position: number };
+
+export function QuestionSetManager({ initial }: { initial: SetRow[] }) {
+  const [sets, setSets] = useState(initial);
+  const [topic, setTopic] = useState("");
+  const [niche, setNiche] = useState("");
+  const [level, setLevel] = useState("mid");
+  const [count, setCount] = useState(10);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [openId, setOpenId] = useState("");
+  const [preview, setPreview] = useState<Record<string, Item[]>>({});
+
+  async function generate() {
+    if (!topic.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/v1/admin/question-sets", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topic: topic.trim(), niche: niche.trim() || undefined, level, count }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Generation failed.");
+      const set = json.data as { id: string; questions: Item[] } & Record<string, unknown>;
+      setSets((s) => [{ ...set, questionCount: set.questions?.length ?? 0, attempts: 0 }, ...s]);
+      setPreview((p) => ({ ...p, [set.id]: set.questions ?? [] }));
+      setOpenId(set.id);
+      setTopic("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleOpen(id: string) {
+    if (openId === id) return setOpenId("");
+    setOpenId(id);
+    if (!preview[id]) {
+      const res = await fetch(`/api/v1/admin/question-sets/${id}`);
+      const json = await res.json();
+      if (res.ok) setPreview((p) => ({ ...p, [id]: json.data.questions as Item[] }));
+    }
+  }
+
+  async function setPublished(id: string, published: boolean) {
+    setSets((s) => s.map((x) => (x.id === id ? { ...x, published } : x)));
+    await fetch(`/api/v1/admin/question-sets/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ published }),
+    });
+  }
+
+  async function remove(id: string) {
+    setSets((s) => s.filter((x) => x.id !== id));
+    await fetch(`/api/v1/admin/question-sets/${id}`, { method: "DELETE" });
+  }
+
+  const byNiche = sets.reduce<Record<string, SetRow[]>>((acc, s) => {
+    const k = String(s.niche || "General");
+    (acc[k] ||= []).push(s);
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Practice sets</h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">Generate MCQ sets with Gemini across niches. Published sets appear on every user&apos;s Practice page.</p>
+      </div>
+
+      <div className="rounded-[16px] border border-[var(--primary)]/30 bg-[var(--primary-soft)]/40 p-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium">Topic</span>
+            <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. React rendering & reconciliation" />
+          </label>
+          <label className="block"><span className="mb-1 block text-xs font-medium">Niche</span>
+            <Input value={niche} onChange={(e) => setNiche(e.target.value)} placeholder="e.g. Frontend" />
+          </label>
+          <label className="block"><span className="mb-1 block text-xs font-medium">Level</span>
+            <select value={level} onChange={(e) => setLevel(e.target.value)} className="h-10 w-full rounded-[9px] border bg-[var(--surface-elevated)] px-3 text-sm">
+              {["junior", "mid", "senior", "all"].map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </label>
+          <label className="block"><span className="mb-1 block text-xs font-medium">Questions</span>
+            <Input type="number" min={5} max={25} value={count} onChange={(e) => setCount(Math.max(5, Math.min(25, Number(e.target.value) || 10)))} />
+          </label>
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <Button size="sm" onClick={generate} disabled={busy || !topic.trim()}>
+            {busy ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}Generate set
+          </Button>
+          {error && <span className="text-xs text-[var(--critical)]">{error}</span>}
+        </div>
+      </div>
+
+      {Object.entries(byNiche).map(([n, rows]) => (
+        <section key={n}>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{n} · {rows.length}</h2>
+          <div className="overflow-hidden rounded-[14px] border bg-[var(--surface)]">
+            {rows.map((s) => {
+              const id = String(s.id);
+              const open = openId === id;
+              return (
+                <div key={id} className="border-b last:border-0">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <button onClick={() => toggleOpen(id)} className="text-[var(--muted)]">{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{String(s.title)}</p>
+                      <p className="text-xs text-[var(--muted)]">{String(s.level)} · {Number(s.questionCount)} questions · {Number(s.attempts ?? 0)} attempts</p>
+                    </div>
+                    <label className="flex items-center gap-1.5 text-[11px] font-medium">
+                      <input type="checkbox" className="size-3.5 accent-[var(--primary)]" checked={Boolean(s.published)} onChange={(e) => setPublished(id, e.target.checked)} />
+                      {s.published ? "live" : "hidden"}
+                    </label>
+                    <button onClick={() => remove(id)} className="grid size-8 place-items-center rounded-[8px] text-[var(--muted)] hover:text-[var(--critical)]"><Trash2 size={14} /></button>
+                  </div>
+                  {open && (
+                    <div className="space-y-3 border-t bg-[var(--surface-elevated)] px-4 py-3">
+                      {(preview[id] ?? []).map((q, i) => (
+                        <div key={q.id} className="text-xs">
+                          <p className="font-medium">{i + 1}. {q.prompt}</p>
+                          <ul className="mt-1 space-y-0.5">
+                            {q.options.map((o, j) => (
+                              <li key={j} className={cn("pl-3", j === q.correctIndex ? "font-semibold text-[var(--positive)]" : "text-[var(--muted-strong)]")}>
+                                {String.fromCharCode(65 + j)}. {o}{j === q.correctIndex ? "  ✓" : ""}
+                              </li>
+                            ))}
+                          </ul>
+                          {q.explanation && <p className="mt-1 pl-3 text-[var(--muted)]">{q.explanation}</p>}
+                        </div>
+                      ))}
+                      {!preview[id]?.length && <p className="text-xs text-[var(--muted)]">Loading…</p>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+      {!sets.length && <p className="rounded-[14px] border bg-[var(--surface)] px-4 py-10 text-center text-sm text-[var(--muted)]">No sets yet. Generate one above.</p>}
+    </div>
+  );
+}

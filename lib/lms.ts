@@ -102,6 +102,92 @@ export async function deleteCourse(id: string) {
   await query("DELETE FROM courses WHERE id=$1", [id]);
 }
 
+// --- AI authoring ------------------------------------------------------------
+
+/** Map free-text skill names from Gemini onto real skills.id values by name/alias. */
+async function resolveSkillIds(names: string[]): Promise<string[]> {
+  const clean = [...new Set(names.map((n) => n.trim()).filter(Boolean))].slice(0, 20);
+  if (!clean.length) return [];
+  const rows = await query<{ id: string }>(
+    `SELECT DISTINCT s.id
+       FROM skills s, unnest($1::text[]) AS want(name)
+      WHERE lower(s.name) = lower(want.name)
+         OR lower(want.name) = ANY (SELECT lower(a) FROM unnest(s.aliases) AS a)`,
+    [clean],
+  );
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Suggest topics for the admin. Returns the raw Gemini list plus, for each,
+ * the subset of skill names that already exist in the catalog.
+ */
+export async function suggestCourseTopics(focus?: string) {
+  const gemini = await import("@/lib/gemini");
+  if (!gemini.isGeminiConfigured()) throw new Error("GEMINI_NOT_CONFIGURED");
+  const [existing, roles] = await Promise.all([
+    query<{ title: string }>(`SELECT title FROM courses ORDER BY updated_at DESC LIMIT 40`),
+    query<{ title: string }>(`SELECT DISTINCT r.title FROM roles r JOIN profiles p ON p.target_role_id = r.id LIMIT 20`),
+  ]);
+  const out = await gemini.suggestCourseTopics({
+    focus,
+    existingTitles: existing.map((r) => r.title),
+    roleTitles: roles.map((r) => r.title),
+  });
+  return out.topics;
+}
+
+/**
+ * Generate a full course with Gemini and save it as an unpublished draft the
+ * admin can review, tweak and publish.
+ */
+export async function generateCourseDraft(
+  input: {
+    topic: string;
+    level?: Course["level"];
+    track?: Course["track"];
+    lessonCount?: number;
+    audience?: string;
+  },
+  editor: string,
+) {
+  const gemini = await import("@/lib/gemini");
+  if (!gemini.isGeminiConfigured()) throw new Error("GEMINI_NOT_CONFIGURED");
+
+  const catalog = await query<{ name: string }>(`SELECT name FROM skills ORDER BY name`);
+  const generated = await gemini.generateCourse({
+    topic: input.topic,
+    level: input.level,
+    track: input.track,
+    lessonCount: input.lessonCount,
+    audience: input.audience,
+    knownSkills: catalog.map((r) => r.name),
+  });
+
+  const skillIds = await resolveSkillIds(generated.skills);
+
+  const course = await saveCourse(
+    {
+      title: generated.title,
+      summary: generated.summary,
+      level: generated.level,
+      track: generated.track,
+      skillIds,
+      published: false,
+      lessons: generated.lessons.map((l, position) => ({
+        title: l.title,
+        kind: l.kind === "quiz" ? "quiz" : l.kind === "project" ? "project" : l.kind === "exercise" ? "exercise" : "reading",
+        content: l.content,
+        resourceUrl: null,
+        durationMin: l.durationMin,
+        position,
+      })),
+    },
+    editor,
+  );
+  return { course, skillNames: generated.skills, matchedSkillCount: skillIds.length };
+}
+
 // --- user side -----------------------------------------------------------
 
 export async function getRecommendedCourses(userId: string) {

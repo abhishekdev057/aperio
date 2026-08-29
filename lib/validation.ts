@@ -96,6 +96,29 @@ export const courseSaveSchema = z.object({
     .optional(),
 });
 
+export const courseGenerateSchema = z.object({
+  topic: z.string().trim().min(4).max(200),
+  level: z.enum(["junior", "mid", "senior", "all"]).optional(),
+  track: z.enum(["technical", "soft", "mixed"]).optional(),
+  lessonCount: z.coerce.number().int().min(4).max(12).optional(),
+  audience: z.string().trim().max(200).optional(),
+});
+
+export const courseTopicSuggestSchema = z.object({
+  focus: z.string().trim().max(200).optional(),
+});
+
+export const questionSetGenerateSchema = z.object({
+  topic: z.string().trim().min(3).max(200),
+  niche: z.string().trim().max(60).optional(),
+  level: z.enum(["junior", "mid", "senior", "all"]).optional(),
+  count: z.coerce.number().int().min(5).max(25).optional(),
+});
+
+export const questionSetAttemptSchema = z.object({
+  answers: z.array(z.object({ questionId: idSchema, answerIndex: z.number().int().min(0).max(3) })).min(1).max(30),
+});
+
 export const marketSourceSchema = z.object({
   id: idSchema.optional(),
   name: z.string().trim().min(2).max(120),
