@@ -17,6 +17,8 @@ interface LinkedChannel {
   id: string;
   platform: "telegram" | "whatsapp" | "email";
   address: string;
+  via?: string | null;
+  peerAccessHash?: string | null;
 }
 
 export function newLinkCode() {
@@ -29,7 +31,7 @@ export function newLinkCode() {
 
 async function linkedChannels(userId: string): Promise<LinkedChannel[]> {
   const channels = await query<LinkedChannel & Record<string, unknown>>(
-    `SELECT id, platform, address FROM messaging_channels
+    `SELECT id, platform, address, via, peer_access_hash AS "peerAccessHash" FROM messaging_channels
      WHERE user_id=$1 AND status='linked' AND address IS NOT NULL`,
     [userId],
   );
@@ -49,6 +51,11 @@ async function linkedChannels(userId: string): Promise<LinkedChannel[]> {
 
 async function deliver(channel: LinkedChannel, text: string) {
   if (channel.platform === "telegram") {
+    if (channel.via === "userbot") {
+      const { sendUserbotDirect } = await import("@/lib/telegram-userbot");
+      await sendUserbotDirect(channel.address, channel.peerAccessHash ?? null, text.replace(/<\/?b>/g, ""));
+      return;
+    }
     if (!(await getTelegramConfig()).configured) throw new Error("TELEGRAM_NOT_CONFIGURED");
     await sendTelegramMessage(channel.address, text);
     return;

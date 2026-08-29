@@ -1,6 +1,7 @@
 import { query } from "@/lib/db";
 import { getEmailConfig } from "@/lib/email";
 import { getTelegramConfig } from "@/lib/telegram";
+import { userbotStatus } from "@/lib/telegram-userbot";
 import { getWhatsAppConfig } from "@/lib/whatsapp";
 
 export interface IntegrationsState {
@@ -41,7 +42,7 @@ export async function getIntegrationsState(userId: string): Promise<Integrations
      FROM users u LEFT JOIN preferences p ON p.user_id = u.id WHERE u.id=$1`,
     [userId],
   );
-  const [telegram, whatsapp, email] = await Promise.all([getTelegramConfig(), getWhatsAppConfig(), getEmailConfig()]);
+  const [telegram, whatsapp, email, userbot] = await Promise.all([getTelegramConfig(), getWhatsAppConfig(), getEmailConfig(), userbotStatus()]);
   const row = prefs[0] ?? {};
   return {
     channels,
@@ -54,7 +55,7 @@ export async function getIntegrationsState(userId: string): Promise<Integrations
       notifyEmail: Boolean(row.notifyEmail ?? true),
     },
     providers: {
-      telegram: { configured: telegram.configured, botUsername: telegram.botUsername },
+      telegram: { configured: telegram.configured || userbot.loggedIn, botUsername: userbot.loggedIn && userbot.username ? userbot.username : telegram.botUsername },
       whatsapp: { configured: whatsapp.configured, businessNumber: whatsapp.businessNumber },
       email: { configured: email.provider !== null, provider: email.provider },
     },

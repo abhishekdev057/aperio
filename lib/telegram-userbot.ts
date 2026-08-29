@@ -2,6 +2,7 @@ import "server-only";
 
 import { getIntegrationRuntime, setRawSecrets, type IntegrationKey } from "@/lib/settings";
 import { query } from "@/lib/db";
+import { parseLinkCode } from "@/lib/telegram";
 import {
   MAX_MEDIA_BYTES,
   getThreadForSend,
@@ -91,7 +92,12 @@ export async function signInUserbot(code: string, password?: string) {
     }
 
     const me = await client.getMe();
-    await setRawSecrets(KEY, { stringSession: client.session.save(), _pendingCodeHash: null, _pendingSession: null });
+    await setRawSecrets(KEY, {
+      stringSession: client.session.save(),
+      username: me?.username ?? "",
+      _pendingCodeHash: null,
+      _pendingSession: null,
+    });
     return {
       linked: true,
       me: {
@@ -132,6 +138,7 @@ export async function userbotStatus() {
     loggedIn: Boolean(rt.secret("stringSession")),
     pending: Boolean(rt.secret("_pendingCodeHash")),
     phone: String(rt.config.phone ?? ""),
+    username: (rt.secret("username") ?? "").replace(/^@/, ""),
   };
 }
 
@@ -203,6 +210,32 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
       const messages = await client.getMessages(entity, { limit: perDialog, minId });
       for (const msg of [...messages].reverse()) {
         if (!msg?.id) continue;
+
+        // A user who linked Telegram via the user bot messages it their code.
+        if (!msg.out && peerTypeOf(entity) === "user") {
+          const code = parseLinkCode(msg.message ?? undefined);
+          if (code) {
+            const linked = await query<{ id: string; userId: string } & Record<string, unknown>>(
+              `UPDATE messaging_channels
+               SET status='linked', via='userbot', address=$1, peer_access_hash=$2, handle=$3,
+                   link_code=NULL, link_code_expires_at=NULL, verified_at=now(), updated_at=now()
+               WHERE platform='telegram' AND link_code=$4 AND (link_code_expires_at IS NULL OR link_code_expires_at > now())
+               RETURNING id, user_id AS "userId"`,
+              [peerId, entity.accessHash != null ? String(entity.accessHash) : null, entity.username ? `@${entity.username}` : name, code],
+            );
+            if (linked[0]) {
+              await query(
+                `UPDATE messaging_channels SET status='disabled', address=NULL, updated_at=now()
+                 WHERE platform='telegram' AND address=$1 AND id <> $2`,
+                [peerId, linked[0].id],
+              );
+              await client.sendMessage(entity, {
+                message: "Aperio linked. You'll get roadmap reminders, a weekly digest, analysis updates, and any tests or polls here. Manage them in Settings.",
+              }).catch(() => {});
+            }
+          }
+        }
+
         const media = mediaKind(msg);
         let mediaId: string | null = null;
         let mediaSize: number | null = null;
@@ -282,4 +315,24 @@ export async function sendUserbotMessage(threadId: string, input: { text?: strin
   } finally {
     await client.disconnect().catch(() => {});
   }
+}
+
+/** Direct send to a Telegram user by their id + access hash (used by notifications). */
+export async function sendUserbotDirect(address: string, accessHash: string | null, text: string) {
+  const client = await connectedClient();
+  if (!client) throw new Error("USERBOT_NOT_LOGGED_IN");
+  const { Api } = await tp();
+  try {
+    const peer = new Api.InputPeerUser({
+      userId: BigInt(address.replace(/\D/g, "")),
+      accessHash: accessHash ? BigInt(accessHash) : 0n,
+    });
+    await client.sendMessage(peer, { message: text });
+  } finally {
+    await client.disconnect().catch(() => {});
+  }
+}
+
+export async function isUserbotLoggedIn() {
+  return (await userbotStatus()).loggedIn;
 }
