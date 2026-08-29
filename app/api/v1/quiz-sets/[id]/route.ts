@@ -7,9 +7,9 @@ export const runtime = "nodejs";
 
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await requireUser();
+    const user = await requireUser();
     const id = idSchema.parse((await context.params).id);
-    const set = await getQuestionSetForUser(id);
+    const set = await getQuestionSetForUser(user.id, id);
     return set ? ok(set) : fail("NOT_FOUND", "Question set not found.", 404);
   } catch (error) {
     return handleApiError(error);

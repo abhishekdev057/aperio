@@ -20,6 +20,7 @@ export interface Course {
   track: "technical" | "soft" | "mixed";
   skillIds: string[];
   published: boolean;
+  priceInr: number;
   createdBy: string | null;
   updatedAt: string;
   lessons: CourseLesson[];
@@ -32,7 +33,7 @@ function slugify(title: string) {
 export async function listCourses(opts: { publishedOnly?: boolean } = {}) {
   return query<Record<string, unknown>>(
     `SELECT c.id, c.slug, c.title, c.summary, c.level, c.track, c.skill_ids AS "skillIds", c.published,
-      c.updated_at AS "updatedAt",
+      c.price_inr AS "priceInr", c.updated_at AS "updatedAt",
       (SELECT count(*) FROM course_lessons l WHERE l.course_id=c.id) AS lessons,
       (SELECT count(*) FROM course_enrollments e WHERE e.course_id=c.id) AS enrollments
      FROM courses c
@@ -43,7 +44,8 @@ export async function listCourses(opts: { publishedOnly?: boolean } = {}) {
 
 export async function getCourse(id: string): Promise<Course | null> {
   const course = await one<Record<string, unknown>>(
-    `SELECT id, slug, title, summary, level, track, skill_ids AS "skillIds", published, created_by AS "createdBy", updated_at AS "updatedAt"
+    `SELECT id, slug, title, summary, level, track, skill_ids AS "skillIds", published,
+       price_inr AS "priceInr", created_by AS "createdBy", updated_at AS "updatedAt"
      FROM courses WHERE id=$1`,
     [id],
   );
@@ -65,6 +67,7 @@ export async function saveCourse(
     track?: Course["track"];
     skillIds?: string[];
     published?: boolean;
+    priceInr?: number;
     lessons?: CourseLesson[];
   },
   editor: string,
@@ -72,6 +75,7 @@ export async function saveCourse(
   const id = input.id ?? randomUUID();
   const slug = slugify(input.title);
   const skillIds = (input.skillIds ?? []).filter(Boolean).slice(0, 40);
+  const priceInr = Math.max(0, Math.min(100000, Math.round(Number(input.priceInr ?? 0) || 0)));
   const lessons = (input.lessons ?? []).map((l, index) => ({
     id: l.id && /^[a-f0-9-]{36}$/.test(l.id) ? l.id : randomUUID(),
     title: String(l.title || "Untitled lesson").slice(0, 160),
@@ -84,11 +88,11 @@ export async function saveCourse(
 
   const sql = db();
   await sql.transaction((tx) => [
-    tx`INSERT INTO courses (id, slug, title, summary, level, track, skill_ids, published, created_by, updated_at)
+    tx`INSERT INTO courses (id, slug, title, summary, level, track, skill_ids, published, price_inr, created_by, updated_at)
        VALUES (${id}, ${slug}, ${input.title.slice(0, 160)}, ${(input.summary ?? "").slice(0, 2000)},
-         ${input.level ?? "mid"}, ${input.track ?? "technical"}, ${skillIds}, ${input.published ?? false}, ${editor}, now())
+         ${input.level ?? "mid"}, ${input.track ?? "technical"}, ${skillIds}, ${input.published ?? false}, ${priceInr}, ${editor}, now())
        ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, summary=EXCLUDED.summary, level=EXCLUDED.level,
-         track=EXCLUDED.track, skill_ids=EXCLUDED.skill_ids, published=EXCLUDED.published, updated_at=now()`,
+         track=EXCLUDED.track, skill_ids=EXCLUDED.skill_ids, published=EXCLUDED.published, price_inr=EXCLUDED.price_inr, updated_at=now()`,
     tx`DELETE FROM course_lessons WHERE course_id=${id}`,
     ...lessons.map(
       (l) => tx`INSERT INTO course_lessons (id, course_id, title, kind, content, resource_url, duration_min, position)
@@ -220,10 +224,11 @@ export async function getRecommendedCourses(userId: string) {
        WHERE ar.classification <> 'strong'
          AND a.created_at = (SELECT max(created_at) FROM analyses WHERE user_id=$1)
      )
-     SELECT c.id, c.slug, c.title, c.summary, c.level, c.track,
+     SELECT c.id, c.slug, c.title, c.summary, c.level, c.track, c.price_inr AS "priceInr",
        (SELECT count(*) FROM course_lessons l WHERE l.course_id=c.id) AS lessons,
        cardinality(ARRAY(SELECT unnest(c.skill_ids) INTERSECT SELECT skill_id FROM gaps)) AS "matchCount",
-       EXISTS (SELECT 1 FROM course_enrollments e WHERE e.course_id=c.id AND e.user_id=$1) AS "enrolled"
+       EXISTS (SELECT 1 FROM course_enrollments e WHERE e.course_id=c.id AND e.user_id=$1) AS "enrolled",
+       (c.price_inr <= 0 OR EXISTS (SELECT 1 FROM payments p WHERE p.user_id=$1 AND p.item_type='course' AND p.item_id=c.id AND p.status='paid')) AS "owned"
      FROM courses c
      WHERE c.published = true
        AND cardinality(ARRAY(SELECT unnest(c.skill_ids) INTERSECT SELECT skill_id FROM gaps)) > 0
@@ -245,8 +250,15 @@ export async function getEnrolledCourses(userId: string) {
 }
 
 export async function enrollInCourse(userId: string, courseId: string, source: "self" | "recommended" = "self") {
-  const course = await one("SELECT id FROM courses WHERE id=$1 AND published=true", [courseId]);
+  const course = await one<{ id: string; priceInr: number }>(
+    `SELECT id, price_inr AS "priceInr" FROM courses WHERE id=$1 AND published=true`,
+    [courseId],
+  );
   if (!course) throw new Error("COURSE_NOT_FOUND");
+  if (course.priceInr > 0) {
+    const { hasEntitlement } = await import("@/lib/payments");
+    if (!(await hasEntitlement(userId, "course", courseId))) throw new Error("PAYMENT_REQUIRED");
+  }
   await query(
     `INSERT INTO course_enrollments (id, user_id, course_id, source)
      VALUES ($1,$2,$3,$4) ON CONFLICT (user_id, course_id) DO NOTHING`,
@@ -257,7 +269,7 @@ export async function enrollInCourse(userId: string, courseId: string, source: "
 
 export async function getCourseForLearner(userId: string, courseId: string) {
   const course = await one<Record<string, unknown>>(
-    `SELECT c.id, c.slug, c.title, c.summary, c.level, c.track,
+    `SELECT c.id, c.slug, c.title, c.summary, c.level, c.track, c.price_inr AS "priceInr",
        e.id AS "enrollmentId", e.status AS "enrollmentStatus"
      FROM courses c
      LEFT JOIN course_enrollments e ON e.course_id=c.id AND e.user_id=$1
@@ -265,6 +277,12 @@ export async function getCourseForLearner(userId: string, courseId: string) {
     [userId, courseId],
   );
   if (!course) return null;
+  if (Number(course.priceInr) > 0) {
+    const { hasEntitlement } = await import("@/lib/payments");
+    if (!(await hasEntitlement(userId, "course", courseId))) {
+      return { ...course, locked: true, lessons: [] };
+    }
+  }
   const lessons = await query<Record<string, unknown>>(
     `SELECT l.id, l.title, l.kind, l.content, l.resource_url AS "resourceUrl", l.duration_min AS "durationMin", l.position,
        COALESCE(lp.status, 'not_started') AS status

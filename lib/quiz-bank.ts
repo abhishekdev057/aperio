@@ -49,7 +49,7 @@ export async function suggestQuestionSetTopics(niche?: string) {
 
 /** Generate one question set with Gemini and store it. */
 export async function generateQuestionSet(
-  input: { topic: string; niche?: string; level?: QuestionSetRow["level"]; count?: number },
+  input: { topic: string; niche?: string; level?: QuestionSetRow["level"]; count?: number; priceInr?: number },
   editor: string,
 ) {
   const gemini = await import("@/lib/gemini");
@@ -82,11 +82,13 @@ export async function generateQuestionSet(
     position,
   }));
 
+  const priceInr = Math.max(0, Math.min(100000, Math.round(Number(input.priceInr ?? 0) || 0)));
+
   const sql = db();
   await sql.transaction((tx) => [
-    tx`INSERT INTO question_sets (id, title, niche, topic, level, skill_id, description, question_count, generator, created_by)
+    tx`INSERT INTO question_sets (id, title, niche, topic, level, skill_id, description, question_count, price_inr, generator, created_by)
        VALUES (${id}, ${generated.title.slice(0, 140)}, ${niche}, ${input.topic.slice(0, 200)}, ${level}, ${skillId},
-         ${generated.description.slice(0, 500)}, ${items.length}, 'gemini', ${editor})`,
+         ${generated.description.slice(0, 500)}, ${items.length}, ${priceInr}, 'gemini', ${editor})`,
     ...items.map(
       (it) => tx`INSERT INTO question_set_items (id, set_id, prompt, options, correct_index, explanation, position)
         VALUES (${it.id}, ${id}, ${it.prompt}, ${JSON.stringify(it.options)}::jsonb, ${it.correctIndex}, ${it.explanation}, ${it.position})`,
@@ -98,16 +100,21 @@ export async function generateQuestionSet(
 export async function listQuestionSets() {
   return query<Record<string, unknown>>(
     `SELECT s.id, s.title, s.niche, s.topic, s.level, s.description, s.question_count AS "questionCount",
-       s.published, s.created_at AS "createdAt",
+       s.published, s.price_inr AS "priceInr", s.created_at AS "createdAt",
        (SELECT count(*) FROM question_set_attempts a WHERE a.set_id = s.id) AS attempts
      FROM question_sets s
      ORDER BY s.niche, s.created_at DESC`,
   );
 }
 
+export async function setQuestionSetPrice(id: string, priceInr: number) {
+  const p = Math.max(0, Math.min(100000, Math.round(Number(priceInr) || 0)));
+  await query(`UPDATE question_sets SET price_inr=$2, updated_at=now() WHERE id=$1`, [id, p]);
+}
+
 export async function getQuestionSet(id: string) {
   const set = await one<QuestionSetRow & Record<string, unknown>>(
-    `SELECT id, title, niche, topic, level, description, question_count AS "questionCount", published, created_at AS "createdAt"
+    `SELECT id, title, niche, topic, level, description, question_count AS "questionCount", published, price_inr AS "priceInr", created_at AS "createdAt"
      FROM question_sets WHERE id=$1`,
     [id],
   );
@@ -134,6 +141,8 @@ export async function deleteQuestionSet(id: string) {
 export async function listQuestionSetsForUser(userId: string) {
   return query<Record<string, unknown>>(
     `SELECT s.id, s.title, s.niche, s.topic, s.level, s.description, s.question_count AS "questionCount",
+       s.price_inr AS "priceInr",
+       (s.price_inr <= 0 OR EXISTS (SELECT 1 FROM payments p WHERE p.user_id=$1 AND p.item_type='question_set' AND p.item_id=s.id AND p.status='paid')) AS "owned",
        (SELECT max(a.score) FROM question_set_attempts a WHERE a.set_id=s.id AND a.user_id=$1) AS "bestScore",
        (SELECT count(*) FROM question_set_attempts a WHERE a.set_id=s.id AND a.user_id=$1) AS "attempts"
      FROM question_sets s
@@ -144,13 +153,17 @@ export async function listQuestionSetsForUser(userId: string) {
 }
 
 /** Set for a learner to take — questions and options only, no answers. */
-export async function getQuestionSetForUser(id: string) {
+export async function getQuestionSetForUser(userId: string, id: string) {
   const set = await one<Record<string, unknown>>(
-    `SELECT id, title, niche, topic, level, description, question_count AS "questionCount"
+    `SELECT id, title, niche, topic, level, description, question_count AS "questionCount", price_inr AS "priceInr"
      FROM question_sets WHERE id=$1 AND published=true`,
     [id],
   );
   if (!set) return null;
+  if (Number(set.priceInr) > 0) {
+    const { hasEntitlement } = await import("@/lib/payments");
+    if (!(await hasEntitlement(userId, "question_set", id))) return { ...set, locked: true, questions: [] };
+  }
   const items = await query<Record<string, unknown>>(
     `SELECT id, prompt, options, position FROM question_set_items WHERE set_id=$1 ORDER BY position`,
     [id],
@@ -160,6 +173,12 @@ export async function getQuestionSetForUser(id: string) {
 
 /** Grade an attempt and store it. `answers` maps question id -> chosen index. */
 export async function submitQuestionSetAttempt(userId: string, setId: string, answers: Array<{ questionId: string; answerIndex: number }>) {
+  const meta = await one<{ priceInr: number }>(`SELECT price_inr AS "priceInr" FROM question_sets WHERE id=$1 AND published=true`, [setId]);
+  if (!meta) throw new Error("SET_NOT_FOUND");
+  if (Number(meta.priceInr) > 0) {
+    const { hasEntitlement } = await import("@/lib/payments");
+    if (!(await hasEntitlement(userId, "question_set", setId))) throw new Error("PAYMENT_REQUIRED");
+  }
   const items = await query<{ id: string; correctIndex: number; explanation: string; options: string[]; prompt: string; position: number }>(
     `SELECT id, correct_index AS "correctIndex", explanation, options, prompt, position
      FROM question_set_items WHERE set_id=$1 ORDER BY position`,

@@ -16,6 +16,7 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
   const [niche, setNiche] = useState("");
   const [level, setLevel] = useState("mid");
   const [count, setCount] = useState(10);
+  const [price, setPrice] = useState(0);
   const [busy, setBusy] = useState<"" | "generate" | "suggest">("");
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState("");
@@ -57,7 +58,7 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
       const res = await fetch("/api/v1/admin/question-sets", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topic: topic.trim(), niche: niche.trim() || undefined, level, count }),
+        body: JSON.stringify({ topic: topic.trim(), niche: niche.trim() || undefined, level, count, priceInr: price }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error?.message || "Generation failed.");
@@ -90,6 +91,16 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ published }),
+    });
+  }
+
+  async function savePrice(id: string, priceInr: number) {
+    const p = Math.max(0, Math.round(priceInr || 0));
+    setSets((s) => s.map((x) => (x.id === id ? { ...x, priceInr: p } : x)));
+    await fetch(`/api/v1/admin/question-sets/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ priceInr: p }),
     });
   }
 
@@ -129,6 +140,9 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
           <label className="block"><span className="mb-1 block text-xs font-medium">Questions</span>
             <Input type="number" min={5} max={25} value={count} onChange={(e) => setCount(Math.max(5, Math.min(25, Number(e.target.value) || 10)))} />
           </label>
+          <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium">Price ₹ — 0 = free (no payment)</span>
+            <Input type="number" min={0} value={price} onChange={(e) => setPrice(Math.max(0, Math.round(Number(e.target.value) || 0)))} placeholder="0" />
+          </label>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button size="sm" variant="secondary" onClick={autofill} disabled={Boolean(busy)}>
@@ -166,6 +180,15 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
                       <p className="truncate text-sm font-medium">{String(s.title)}</p>
                       <p className="text-xs text-[var(--muted)]">{String(s.level)} · {Number(s.questionCount)} questions · {Number(s.attempts ?? 0)} attempts</p>
                     </div>
+                    <label className="flex items-center gap-1 text-[11px] text-[var(--muted)]">
+                      ₹<input
+                        type="number"
+                        min={0}
+                        defaultValue={Number(s.priceInr ?? 0)}
+                        onBlur={(e) => savePrice(id, Number(e.target.value))}
+                        className="h-7 w-16 rounded-[7px] border bg-[var(--surface-elevated)] px-1.5 text-xs"
+                      />
+                    </label>
                     <label className="flex items-center gap-1.5 text-[11px] font-medium">
                       <input type="checkbox" className="size-3.5 accent-[var(--primary)]" checked={Boolean(s.published)} onChange={(e) => setPublished(id, e.target.checked)} />
                       {s.published ? "live" : "hidden"}

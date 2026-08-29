@@ -159,6 +159,7 @@ function Editor({ skills, initial, onSaved, onCancel }: { skills: SkillOption[];
   const [published, setPublished] = useState(Boolean(initial?.published));
   const [skillIds, setSkillIds] = useState<string[]>(Array.isArray(initial?.skillIds) ? (initial!.skillIds as string[]) : []);
   const [lessons, setLessons] = useState<Lesson[]>(Array.isArray(initial?.lessons) && (initial!.lessons as Lesson[]).length ? (initial!.lessons as Lesson[]) : [emptyLesson(0)]);
+  const [priceInr, setPriceInr] = useState<number>(Number(initial?.priceInr ?? 0) || 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -176,6 +177,7 @@ function Editor({ skills, initial, onSaved, onCancel }: { skills: SkillOption[];
           level,
           track,
           published,
+          priceInr,
           skillIds,
           lessons: lessons
             .filter((l) => l.title.trim())
@@ -210,6 +212,10 @@ function Editor({ skills, initial, onSaved, onCancel }: { skills: SkillOption[];
           <select value={track} onChange={(e) => setTrack(e.target.value)} className="h-10 w-full rounded-[9px] border bg-[var(--surface-elevated)] px-3 text-sm">
             {["technical", "soft", "mixed"].map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-medium">Price ₹ — set 0 to make it free (no payment)</span>
+          <Input type="number" min={0} value={priceInr} onChange={(e) => setPriceInr(Math.max(0, Math.round(Number(e.target.value) || 0)))} placeholder="0" />
         </label>
       </div>
 
@@ -347,7 +353,7 @@ export function CourseManager({ initialCourses, skills, embedded }: { initialCou
                 {String(c.title)}
                 <span className={`rounded px-1.5 text-[10px] font-semibold ${c.published ? "bg-[var(--positive-soft)] text-[var(--positive)]" : "bg-[var(--surface-muted)] text-[var(--muted)]"}`}>{c.published ? "published" : "draft"}</span>
               </p>
-              <p className="text-xs text-[var(--muted)]">{String(c.track)} · {String(c.level)} · {Number(c.lessons)} lessons · {Number(c.enrollments)} enrolled</p>
+              <p className="text-xs text-[var(--muted)]">{String(c.track)} · {String(c.level)} · {Number(c.lessons)} lessons · {Number(c.enrollments)} enrolled · {Number(c.priceInr) > 0 ? `₹${Number(c.priceInr)}` : "free"}</p>
             </div>
             <div className="flex shrink-0 gap-2">
               <Button size="sm" variant="secondary" onClick={() => openEdit(String(c.id))} disabled={loadingId === c.id}>{loadingId === c.id ? <LoaderCircle size={13} className="animate-spin" /> : "Edit"}</Button>

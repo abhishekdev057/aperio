@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, LoaderCircle, Trophy, X } from "lucide-react";
+import { Check, ChevronLeft, Loader, LoaderCircle, Lock, Trophy, X } from "lucide-react";
+import { purchaseItem } from "@/components/razorpay-checkout";
 import { cn } from "@/lib/utils";
 
 type SetRow = {
@@ -14,6 +15,8 @@ type SetRow = {
   questionCount: number;
   bestScore: number | null;
   attempts: number;
+  priceInr?: number;
+  owned?: boolean;
 };
 type Question = { id: string; prompt: string; options: string[]; position: number };
 type ReviewItem = { questionId: string; prompt: string; options: string[]; picked: number; correctIndex: number; correct: boolean; explanation: string };
@@ -170,8 +173,29 @@ function Runner({ set, onClose, onScored }: { set: SetRow; onClose: () => void; 
 export function QuizSets({ initial }: { initial: SetRow[] }) {
   const [sets, setSets] = useState(initial);
   const [active, setActive] = useState<SetRow | null>(null);
+  const [buying, setBuying] = useState("");
+  const [error, setError] = useState("");
 
   if (!sets.length) return null;
+
+  async function openSet(s: SetRow) {
+    if (Number(s.priceInr) > 0 && !s.owned) {
+      setBuying(s.id);
+      setError("");
+      try {
+        const done = await purchaseItem("question_set", s.id);
+        if (!done) return;
+        setSets((prev) => prev.map((x) => (x.id === s.id ? { ...x, owned: true } : x)));
+        setActive({ ...s, owned: true });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Payment failed.");
+      } finally {
+        setBuying("");
+      }
+      return;
+    }
+    setActive(s);
+  }
 
   const byNiche = sets.reduce<Record<string, SetRow[]>>((acc, s) => {
     (acc[s.niche || "General"] ||= []).push(s);
@@ -182,28 +206,37 @@ export function QuizSets({ initial }: { initial: SetRow[] }) {
     <section className="mt-10">
       <h2 className="text-lg font-semibold tracking-[-.02em]">Question sets</h2>
       <p className="mt-1 text-sm text-[var(--muted)]">Timed-free multiple-choice sets across topics. Retake any set to raise your score.</p>
+      {error && <p role="alert" className="mt-2 text-sm text-[var(--critical)]">{error}</p>}
 
       <div className="mt-4 space-y-6">
         {Object.entries(byNiche).map(([niche, rows]) => (
           <div key={niche}>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{niche}</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              {rows.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setActive(s)}
-                  className="rounded-[14px] border bg-[var(--surface)] p-4 text-left transition hover:border-[var(--primary)]"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold">{s.title}</h3>
-                    {s.bestScore !== null && (
-                      <span className="shrink-0 rounded-full bg-[var(--primary-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--primary)]">best {s.bestScore}%</span>
-                    )}
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-xs text-[var(--muted)]">{s.description}</p>
-                  <p className="mt-2 text-[11px] text-[var(--muted-strong)]">{s.questionCount} questions · {s.level}{s.attempts ? ` · ${s.attempts} attempt${s.attempts > 1 ? "s" : ""}` : ""}</p>
-                </button>
-              ))}
+              {rows.map((s) => {
+                const locked = Number(s.priceInr) > 0 && !s.owned;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => openSet(s)}
+                    disabled={buying === s.id}
+                    className="rounded-[14px] border bg-[var(--surface)] p-4 text-left transition hover:border-[var(--primary)] disabled:opacity-60"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold">{s.title}</h3>
+                      {buying === s.id ? (
+                        <Loader size={13} className="shrink-0 animate-spin text-[var(--muted)]" />
+                      ) : locked ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-semibold"><Lock size={10} />₹{Number(s.priceInr)}</span>
+                      ) : s.bestScore !== null ? (
+                        <span className="shrink-0 rounded-full bg-[var(--primary-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--primary)]">best {s.bestScore}%</span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs text-[var(--muted)]">{s.description}</p>
+                    <p className="mt-2 text-[11px] text-[var(--muted-strong)]">{s.questionCount} questions · {s.level}{s.attempts ? ` · ${s.attempts} attempt${s.attempts > 1 ? "s" : ""}` : ""}{locked ? " · tap to buy" : ""}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
         ))}

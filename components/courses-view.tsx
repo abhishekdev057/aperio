@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Check, ChevronDown, Circle, GraduationCap, LoaderCircle, PlayCircle, Sparkles } from "lucide-react";
+import { BookOpen, Check, ChevronDown, Circle, GraduationCap, LoaderCircle, Lock, PlayCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { purchaseItem } from "@/components/razorpay-checkout";
 import { cn } from "@/lib/utils";
 
-type RecCourse = { id: string; slug: string; title: string; summary: string; level: string; track: string; lessons: number; matchCount: number; enrolled: boolean };
+type RecCourse = { id: string; slug: string; title: string; summary: string; level: string; track: string; lessons: number; matchCount: number; enrolled: boolean; priceInr?: number; owned?: boolean };
 type EnrolledCourse = { id: string; title: string; summary: string; track: string; status: string; source: string; lessons: number; completed: number };
 type Lesson = { id: string; title: string; kind: string; content: string; resourceUrl: string | null; durationMin: number | null; status: string };
 
@@ -69,19 +70,39 @@ export function CoursesView({ initial }: { initial: { recommended: RecCourse[]; 
   const [recommended, setRecommended] = useState(initial.recommended);
   const [enrolled, setEnrolled] = useState(initial.enrolled);
   const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  function moveToEnrolled(course: RecCourse) {
+    setRecommended((r) => r.filter((x) => x.id !== course.id));
+    setEnrolled((e) => [{ id: course.id, title: course.title, summary: course.summary, track: course.track, status: "active", source: "recommended", lessons: course.lessons, completed: 0 }, ...e]);
+  }
 
   async function enroll(course: RecCourse) {
     setBusy(course.id);
-    const res = await fetch(`/api/v1/courses/${course.id}/enroll`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ source: "recommended" }),
-    });
-    if (res.ok) {
-      setRecommended((r) => r.filter((x) => x.id !== course.id));
-      setEnrolled((e) => [{ id: course.id, title: course.title, summary: course.summary, track: course.track, status: "active", source: "recommended", lessons: course.lessons, completed: 0 }, ...e]);
+    setError("");
+    try {
+      const paid = Number(course.priceInr) > 0 && !course.owned;
+      if (paid) {
+        const done = await purchaseItem("course", course.id);
+        if (!done) return; // dismissed
+        moveToEnrolled(course);
+        return;
+      }
+      const res = await fetch(`/api/v1/courses/${course.id}/enroll`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ source: "recommended" }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error?.message || "Could not enrol.");
+      }
+      moveToEnrolled(course);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not enrol.");
+    } finally {
+      setBusy("");
     }
-    setBusy("");
   }
 
   return (
@@ -91,6 +112,8 @@ export function CoursesView({ initial }: { initial: { recommended: RecCourse[]; 
         <h1 className="mt-2 text-3xl font-semibold tracking-[-.04em]">Courses matched to your gaps</h1>
         <p className="mt-3 text-sm leading-6 text-[var(--muted)]">Structured courses your admins built, recommended by how well they cover the skills missing from your latest analysis — technical and soft.</p>
       </div>
+
+      {error && <p role="alert" className="text-sm text-[var(--critical)]">{error}</p>}
 
       <section>
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Sparkles size={15} className="text-[var(--primary)]" />Recommended for you</h2>
@@ -103,9 +126,13 @@ export function CoursesView({ initial }: { initial: { recommended: RecCourse[]; 
               </div>
               <h3 className="mt-2 font-semibold">{c.title}</h3>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{c.summary}</p>
-              <Button size="sm" className="mt-3" onClick={() => enroll(c)} disabled={busy === c.id}>
-                {busy === c.id ? <LoaderCircle size={14} className="animate-spin" /> : <BookOpen size={14} />}Enrol · {c.lessons} lessons
-              </Button>
+              <div className="mt-3 flex items-center gap-2">
+                <Button size="sm" onClick={() => enroll(c)} disabled={busy === c.id}>
+                  {busy === c.id ? <LoaderCircle size={14} className="animate-spin" /> : Number(c.priceInr) > 0 && !c.owned ? <Lock size={14} /> : <BookOpen size={14} />}
+                  {Number(c.priceInr) > 0 && !c.owned ? `Buy · ₹${Number(c.priceInr)}` : `Enrol · ${c.lessons} lessons`}
+                </Button>
+                {Number(c.priceInr) > 0 && !c.owned && <span className="text-[11px] text-[var(--muted)]">{c.lessons} lessons</span>}
+              </div>
             </div>
           ))}
           {!recommended.length && <p className="text-sm text-[var(--muted)]">No matching courses yet. Run an analysis, or check back once more courses are published.</p>}

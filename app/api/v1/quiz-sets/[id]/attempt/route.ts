@@ -23,6 +23,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return ok(result, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "SET_NOT_FOUND") return fail("NOT_FOUND", "Question set not found.", 404);
+    if (error instanceof Error && error.message === "PAYMENT_REQUIRED") return fail("PAYMENT_REQUIRED", "This set is paid — purchase it first.", 402);
     return handleApiError(error);
   }
 }

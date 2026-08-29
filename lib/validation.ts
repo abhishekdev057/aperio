@@ -80,6 +80,7 @@ export const courseSaveSchema = z.object({
   track: z.enum(["technical", "soft", "mixed"]).optional(),
   skillIds: z.array(idSchema).max(40).optional(),
   published: z.boolean().optional(),
+  priceInr: z.coerce.number().int().min(0).max(100000).optional(),
   lessons: z
     .array(
       z.object({
@@ -113,6 +114,7 @@ export const questionSetGenerateSchema = z.object({
   niche: z.string().trim().max(60).optional(),
   level: z.enum(["junior", "mid", "senior", "all"]).optional(),
   count: z.coerce.number().int().min(5).max(25).optional(),
+  priceInr: z.coerce.number().int().min(0).max(100000).optional(),
 });
 
 export const questionSetAttemptSchema = z.object({

@@ -28,6 +28,7 @@ export async function POST(request: Request) {
         track: input.track,
         skillIds: input.skillIds,
         published: input.published,
+        priceInr: input.priceInr,
         lessons: input.lessons?.map((l) => ({
           id: l.id,
           title: l.title,
