@@ -3,14 +3,7 @@ import "server-only";
 import { one, query } from "@/lib/db";
 import { decryptSecret, encryptSecret, isEncryptionConfigured, maskSecret } from "@/lib/crypto";
 
-export type IntegrationKey =
-  | "telegram.bot"
-  | "telegram.userbot"
-  | "whatsapp.cloud"
-  | "whatsapp.twilio"
-  | "jobs.jsearch"
-  | "jobs.adzuna"
-  | "jobs.generic";
+export type IntegrationKey = "telegram.bot" | "telegram.userbot" | "whatsapp.cloud" | "jobs.arbeitnow";
 
 interface FieldDef {
   name: string;
@@ -25,6 +18,10 @@ export interface IntegrationSchema {
   key: IntegrationKey;
   title: string;
   description: string;
+  /** custom UI panel instead of the generic field form */
+  ui?: "telegram-userbot";
+  docsUrl?: string;
+  webhookPath?: string;
   fields: FieldDef[];
 }
 
@@ -32,28 +29,34 @@ export const INTEGRATION_SCHEMAS: IntegrationSchema[] = [
   {
     key: "telegram.bot",
     title: "Telegram bot",
-    description: "Automated messages to users who link Telegram. Create a bot with @BotFather.",
+    description: "Automated messages to users who link Telegram. Create a bot with @BotFather, then register the webhook to the path below.",
+    docsUrl: "https://core.telegram.org/bots/tutorial",
+    webhookPath: "/api/v1/integrations/telegram/webhook",
     fields: [
       { name: "token", label: "Bot token", secret: true, placeholder: "1234567890:AA...", help: "From @BotFather" },
       { name: "botUsername", label: "Bot @username", secret: false, placeholder: "AperioBot", help: "Without the @" },
-      { name: "webhookSecret", label: "Webhook secret token", secret: true, help: "Any random string; used to verify Telegram webhook calls." },
+      { name: "webhookSecret", label: "Webhook secret token", secret: true, help: "Any random string. Pass it as secret_token when calling setWebhook." },
     ],
   },
   {
     key: "telegram.userbot",
-    title: "Telegram user bot (MTProto)",
-    description: "Credentials for a user-account bot run by an external worker. Aperio stores the config; it does not run an MTProto client itself.",
+    title: "Telegram user bot",
+    description: "Log in a Telegram user account by phone + OTP. Aperio completes the login and stores the resulting string session (encrypted) for later use.",
+    docsUrl: "https://my.telegram.org/apps",
+    ui: "telegram-userbot",
     fields: [
-      { name: "apiId", label: "API ID", secret: false, placeholder: "1234567", help: "my.telegram.org" },
+      { name: "apiId", label: "API ID", secret: false, placeholder: "1234567", help: "my.telegram.org → API development tools" },
       { name: "apiHash", label: "API hash", secret: true },
-      { name: "phone", label: "Phone number", secret: false, placeholder: "+91...", optional: true },
-      { name: "stringSession", label: "String session", secret: true, optional: true, help: "Generated once by your worker after login." },
+      { name: "phone", label: "Phone number", secret: false, placeholder: "+91XXXXXXXXXX" },
+      { name: "stringSession", label: "String session", secret: true, optional: true, help: "Filled automatically after a successful OTP login." },
     ],
   },
   {
     key: "whatsapp.cloud",
     title: "WhatsApp — Meta Cloud API",
-    description: "Meta's official WhatsApp Business Cloud API. Requires a Meta app and a WhatsApp business number. Webhook callback URL: /api/v1/integrations/whatsapp/webhook",
+    description: "Meta's official WhatsApp Business Cloud API. Add the credentials here, then set the webhook in the Meta dashboard to the path below with the verify token you enter.",
+    docsUrl: "https://developers.facebook.com/docs/whatsapp/cloud-api/get-started",
+    webhookPath: "/api/v1/integrations/whatsapp/webhook",
     fields: [
       { name: "phoneNumberId", label: "Phone number ID", secret: false, help: "WhatsApp → API Setup" },
       { name: "businessNumber", label: "Business phone (digits)", secret: false, optional: true, placeholder: "15551234567", help: "Country code + number, digits only. Builds the wa.me link users message." },
@@ -64,42 +67,13 @@ export const INTEGRATION_SCHEMAS: IntegrationSchema[] = [
     ],
   },
   {
-    key: "whatsapp.twilio",
-    title: "WhatsApp — Twilio",
-    description: "Twilio's WhatsApp sender. Alternative to the Meta Cloud API.",
+    key: "jobs.arbeitnow",
+    title: "Job postings — Arbeitnow (free)",
+    description: "Free public job-board API, no key required. When enabled, npm run market:ingest counts skill mentions across recent postings into weighted market signals.",
+    docsUrl: "https://www.arbeitnow.com/api",
     fields: [
-      { name: "accountSid", label: "Account SID", secret: false, placeholder: "AC..." },
-      { name: "authToken", label: "Auth token", secret: true },
-      { name: "fromNumber", label: "From (WhatsApp) number", secret: false, placeholder: "whatsapp:+14155238886" },
-    ],
-  },
-  {
-    key: "jobs.jsearch",
-    title: "Job postings — JSearch (RapidAPI)",
-    description: "Live job-posting counts for the market outlook. Subscribe to JSearch on RapidAPI.",
-    fields: [
-      { name: "rapidApiKey", label: "RapidAPI key", secret: true },
-      { name: "rapidApiHost", label: "RapidAPI host", secret: false, placeholder: "jsearch.p.rapidapi.com" },
-    ],
-  },
-  {
-    key: "jobs.adzuna",
-    title: "Job postings — Adzuna",
-    description: "Adzuna's jobs API. Free tier available at developer.adzuna.com.",
-    fields: [
-      { name: "appId", label: "App ID", secret: false },
-      { name: "appKey", label: "App key", secret: true },
-      { name: "country", label: "Country code", secret: false, placeholder: "in", help: "gb, us, in, …" },
-    ],
-  },
-  {
-    key: "jobs.generic",
-    title: "Job postings — custom endpoint",
-    description: "Any HTTP endpoint your ingestion worker calls. Aperio just stores the credentials.",
-    fields: [
-      { name: "baseUrl", label: "Base URL", secret: false, placeholder: "https://api.example.com" },
-      { name: "apiKey", label: "API key", secret: true, optional: true },
-      { name: "authHeader", label: "Auth header name", secret: false, optional: true, placeholder: "Authorization" },
+      { name: "pages", label: "Pages to scan per run", secret: false, optional: true, placeholder: "5", help: "~100 postings per page. Default 5." },
+      { name: "remoteOnly", label: "Remote only? (true/false)", secret: false, optional: true, placeholder: "false" },
     ],
   },
 ];
@@ -185,6 +159,21 @@ export async function saveIntegration(
     [key, JSON.stringify(config), JSON.stringify(secrets), enabled, updatedBy],
   );
   return getIntegrationForAdmin(key);
+}
+
+/** Merge arbitrary encrypted secret keys (used by multi-step flows like userbot login). */
+export async function setRawSecrets(key: IntegrationKey, patch: Record<string, string | null>) {
+  const row = await readRow(key);
+  const secrets = { ...(row?.secrets ?? {}) };
+  for (const [field, value] of Object.entries(patch)) {
+    if (value === null) delete secrets[field];
+    else secrets[field] = encryptSecret(value);
+  }
+  await query(
+    `INSERT INTO integration_settings (key, secrets, updated_at) VALUES ($1,$2::jsonb, now())
+     ON CONFLICT (key) DO UPDATE SET secrets=EXCLUDED.secrets, updated_at=now()`,
+    [key, JSON.stringify(secrets)],
+  );
 }
 
 /** Runtime accessor — returns decrypted values. Server-only, never send to a client. */
