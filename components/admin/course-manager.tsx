@@ -18,6 +18,12 @@ function AiPanel({ onDraft }: { onDraft: (course: Record<string, unknown>, note:
   const [busy, setBusy] = useState<"" | "suggest" | "generate">("");
   const [error, setError] = useState("");
 
+  function applyTopic(tp: Topic) {
+    setTopic(tp.title);
+    setLevel(tp.level);
+    setTrack(tp.track);
+  }
+
   async function suggest() {
     setBusy("suggest");
     setError("");
@@ -29,7 +35,9 @@ function AiPanel({ onDraft }: { onDraft: (course: Record<string, unknown>, note:
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error?.message || "Could not suggest topics.");
-      setTopics(json.data.topics as Topic[]);
+      const list = json.data.topics as Topic[];
+      setTopics(list);
+      if (list[0]) applyTopic(list[0]); // fill the fields so nothing has to be typed
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not suggest topics.");
     } finally {
@@ -101,33 +109,35 @@ function AiPanel({ onDraft }: { onDraft: (course: Record<string, unknown>, note:
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={() => generate()} disabled={Boolean(busy) || !topic.trim()}>
+        <Button size="sm" variant="secondary" onClick={suggest} disabled={Boolean(busy)}>
+          {busy === "suggest" ? <LoaderCircle size={13} className="animate-spin" /> : <Wand2 size={13} />}Autofill fields
+        </Button>
+        <Input value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="about… (optional)" className="h-9 w-44" />
+        <Button size="sm" onClick={() => generate()} disabled={Boolean(busy) || !topic.trim()} className="ml-auto">
           {busy === "generate" ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}Generate course
         </Button>
-        <div className="ml-auto flex items-center gap-2">
-          <Input value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="Suggest topics about… (optional)" className="h-9 w-56" />
-          <Button size="sm" variant="secondary" onClick={suggest} disabled={Boolean(busy)}>
-            {busy === "suggest" ? <LoaderCircle size={13} className="animate-spin" /> : <Wand2 size={13} />}Suggest
-          </Button>
-        </div>
       </div>
+      <p className="mt-1.5 text-[11px] text-[var(--muted)]">Autofill picks a fresh topic (never one you already have) and fills every field above. Tweak if you want, then Generate.</p>
 
       {error && <p className="mt-2 text-xs text-[var(--critical)]">{error}</p>}
 
       {topics.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {topics.map((tp, i) => (
-            <div key={i} className="flex items-start gap-3 rounded-[10px] border bg-[var(--surface)] p-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{tp.title}</p>
-                <p className="text-[11px] text-[var(--muted)]">{tp.niche} · {tp.level} · {tp.track} — {tp.rationale}</p>
-                {tp.skills.length > 0 && <p className="mt-1 text-[11px] text-[var(--muted-strong)]">Skills: {tp.skills.join(", ")}</p>}
+        <div className="mt-4">
+          <p className="mb-1.5 text-[11px] font-medium text-[var(--muted)]">Other fresh topics — click to load one into the fields:</p>
+          <div className="space-y-2">
+            {topics.map((tp, i) => (
+              <div key={i} className="flex items-start gap-3 rounded-[10px] border bg-[var(--surface)] p-3">
+                <button type="button" onClick={() => applyTopic(tp)} className="min-w-0 flex-1 text-left">
+                  <p className="text-sm font-medium">{tp.title}</p>
+                  <p className="text-[11px] text-[var(--muted)]">{tp.niche} · {tp.level} · {tp.track} — {tp.rationale}</p>
+                  {tp.skills.length > 0 && <p className="mt-1 text-[11px] text-[var(--muted-strong)]">Skills: {tp.skills.join(", ")}</p>}
+                </button>
+                <Button size="sm" variant="secondary" onClick={() => generate(tp)} disabled={Boolean(busy)}>
+                  {busy === "generate" ? <LoaderCircle size={13} className="animate-spin" /> : "Generate"}
+                </Button>
               </div>
-              <Button size="sm" variant="secondary" onClick={() => generate(tp)} disabled={Boolean(busy)}>
-                {busy === "generate" ? <LoaderCircle size={13} className="animate-spin" /> : "Generate"}
-              </Button>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -258,7 +268,7 @@ function Editor({ skills, initial, onSaved, onCancel }: { skills: SkillOption[];
   );
 }
 
-export function CourseManager({ initialCourses, skills }: { initialCourses: CourseRow[]; skills: SkillOption[] }) {
+export function CourseManager({ initialCourses, skills, embedded }: { initialCourses: CourseRow[]; skills: SkillOption[]; embedded?: boolean }) {
   const [courses, setCourses] = useState(initialCourses);
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
   const [creating, setCreating] = useState(false);
@@ -308,8 +318,8 @@ export function CourseManager({ initialCourses, skills }: { initialCourses: Cour
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">LMS</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">Build courses; published ones are auto-recommended to users by skill-gap overlap.</p>
+          {!embedded && <h1 className="text-2xl font-semibold tracking-tight">LMS</h1>}
+          <p className={embedded ? "text-sm text-[var(--muted)]" : "mt-1 text-sm text-[var(--muted)]"}>Build courses; published ones are auto-recommended to users by skill-gap overlap.</p>
         </div>
         {!creating && !editing && <Button size="sm" onClick={() => { setCreating(true); setEditing(null); }}><Plus size={14} />New course</Button>}
       </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, ArrowLeft, GraduationCap, LayoutDashboard, LineChart, ListChecks, MessagesSquare, Plug, Users } from "lucide-react";
+import { Activity, ArrowLeft, GraduationCap, LayoutDashboard, LineChart, MessagesSquare, Plug, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -11,7 +11,6 @@ const nav = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/activity", label: "Activity", icon: Activity },
   { href: "/admin/lms", label: "LMS", icon: GraduationCap },
-  { href: "/admin/practice-sets", label: "Practice sets", icon: ListChecks },
   { href: "/admin/market", label: "Job market", icon: LineChart },
   { href: "/admin/integrations", label: "Integrations", icon: Plug },
 ];

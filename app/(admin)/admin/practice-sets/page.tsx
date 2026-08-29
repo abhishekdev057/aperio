@@ -1,11 +1,6 @@
-import { QuestionSetManager } from "@/components/admin/question-set-manager";
-import { requireAdminPage } from "@/lib/admin";
-import { listQuestionSets } from "@/lib/quiz-bank";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Admin · Practice sets" };
-
-export default async function AdminPracticeSetsPage() {
-  await requireAdminPage();
-  const sets = await listQuestionSets();
-  return <QuestionSetManager initial={sets as never} />;
+// Practice sets moved into the LMS page as a tab.
+export default function AdminPracticeSetsPage() {
+  redirect("/admin/lms?tab=practice");
 }

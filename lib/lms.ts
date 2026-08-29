@@ -154,7 +154,15 @@ export async function generateCourseDraft(
   const gemini = await import("@/lib/gemini");
   if (!gemini.isGeminiConfigured()) throw new Error("GEMINI_NOT_CONFIGURED");
 
-  const catalog = await query<{ name: string }>(`SELECT name FROM skills ORDER BY name`);
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+
+  const [catalog, existing] = await Promise.all([
+    query<{ name: string }>(`SELECT name FROM skills ORDER BY name`),
+    query<{ title: string }>(`SELECT title FROM courses`),
+  ]);
+  const existingNorm = new Set(existing.map((r) => norm(r.title)));
+  if (existingNorm.has(norm(input.topic))) throw new Error("DUPLICATE_COURSE");
+
   const generated = await gemini.generateCourse({
     topic: input.topic,
     level: input.level,
@@ -162,7 +170,20 @@ export async function generateCourseDraft(
     lessonCount: input.lessonCount,
     audience: input.audience,
     knownSkills: catalog.map((r) => r.name),
+    avoidTitles: existing.map((r) => r.title),
   });
+
+  if (existingNorm.has(norm(generated.title))) throw new Error("DUPLICATE_COURSE");
+
+  // Drop duplicate lessons (same normalised title) before saving.
+  const seenLesson = new Set<string>();
+  const lessons = generated.lessons.filter((l) => {
+    const k = norm(l.title);
+    if (!k || seenLesson.has(k)) return false;
+    seenLesson.add(k);
+    return true;
+  });
+  if (lessons.length < 3) throw new Error("GEMINI_EMPTY_COURSE");
 
   const skillIds = await resolveSkillIds(generated.skills);
 
@@ -174,7 +195,7 @@ export async function generateCourseDraft(
       track: generated.track,
       skillIds,
       published: false,
-      lessons: generated.lessons.map((l, position) => ({
+      lessons: lessons.map((l, position) => ({
         title: l.title,
         kind: l.kind === "quiz" ? "quiz" : l.kind === "project" ? "project" : l.kind === "exercise" ? "exercise" : "reading",
         content: l.content,

@@ -34,6 +34,19 @@ async function resolveSkillId(topic: string, niche: string): Promise<string | nu
   return row?.id ?? null;
 }
 
+const normText = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+
+/** Suggest a fresh practice-set topic for the admin, avoiding what exists. */
+export async function suggestQuestionSetTopics(niche?: string) {
+  const gemini = await import("@/lib/gemini");
+  if (!gemini.isGeminiConfigured()) throw new Error("GEMINI_NOT_CONFIGURED");
+  const existing = await query<{ topic: string; niche: string }>(`SELECT topic, niche FROM question_sets ORDER BY created_at DESC LIMIT 80`);
+  return gemini.suggestQuestionSetTopics({
+    niche,
+    existing: existing.map((r) => `${r.niche} — ${r.topic}`),
+  });
+}
+
 /** Generate one question set with Gemini and store it. */
 export async function generateQuestionSet(
   input: { topic: string; niche?: string; level?: QuestionSetRow["level"]; count?: number },
@@ -44,7 +57,19 @@ export async function generateQuestionSet(
 
   const niche = (input.niche || "General").trim().slice(0, 60) || "General";
   const level = input.level ?? "mid";
-  const generated = await gemini.generateQuestionSet({ topic: input.topic, niche, level, count: input.count });
+
+  const existing = await query<{ topic: string; niche: string; title: string }>(`SELECT topic, niche, title FROM question_sets`);
+  const key = `${normText(niche)}|${normText(input.topic)}`;
+  if (existing.some((r) => `${normText(r.niche)}|${normText(r.topic)}` === key)) throw new Error("DUPLICATE_SET");
+
+  const generated = await gemini.generateQuestionSet({
+    topic: input.topic,
+    niche,
+    level,
+    count: input.count,
+    avoidTopics: existing.filter((r) => normText(r.niche) === normText(niche)).map((r) => r.topic),
+  });
+  if (existing.some((r) => normText(r.title) === normText(generated.title))) throw new Error("DUPLICATE_SET");
   const skillId = await resolveSkillId(input.topic, niche);
 
   const id = randomUUID();

@@ -1,28 +1,57 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, LoaderCircle, Sparkles, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, LoaderCircle, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type SetRow = Record<string, unknown>;
 type Item = { id: string; prompt: string; options: string[]; correctIndex: number; explanation: string; position: number };
+type Suggest = { topic: string; niche: string; level: string; rationale: string };
 
-export function QuestionSetManager({ initial }: { initial: SetRow[] }) {
+export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; embedded?: boolean }) {
   const [sets, setSets] = useState(initial);
   const [topic, setTopic] = useState("");
   const [niche, setNiche] = useState("");
   const [level, setLevel] = useState("mid");
   const [count, setCount] = useState(10);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"" | "generate" | "suggest">("");
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState("");
   const [preview, setPreview] = useState<Record<string, Item[]>>({});
+  const [ideas, setIdeas] = useState<Suggest[]>([]);
+
+  function applyIdea(s: Suggest) {
+    setTopic(s.topic);
+    setNiche(s.niche);
+    setLevel(s.level);
+  }
+
+  async function autofill() {
+    setBusy("suggest");
+    setError("");
+    try {
+      const res = await fetch("/api/v1/admin/question-sets/suggest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ niche: niche.trim() || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Could not suggest.");
+      const list = json.data.topics as Suggest[];
+      setIdeas(list);
+      if (list[0]) applyIdea(list[0]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not suggest.");
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function generate() {
     if (!topic.trim()) return;
-    setBusy(true);
+    setBusy("generate");
     setError("");
     try {
       const res = await fetch("/api/v1/admin/question-sets", {
@@ -37,10 +66,11 @@ export function QuestionSetManager({ initial }: { initial: SetRow[] }) {
       setPreview((p) => ({ ...p, [set.id]: set.questions ?? [] }));
       setOpenId(set.id);
       setTopic("");
+      setIdeas((list) => list.filter((x) => x.topic !== topic.trim()));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed.");
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   }
 
@@ -76,10 +106,12 @@ export function QuestionSetManager({ initial }: { initial: SetRow[] }) {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Practice sets</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">Generate MCQ sets with Gemini across niches. Published sets appear on every user&apos;s Practice page.</p>
-      </div>
+      {!embedded && (
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Practice sets</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">Generate MCQ sets with Gemini across niches. Published sets appear on every user&apos;s Practice page.</p>
+        </div>
+      )}
 
       <div className="rounded-[16px] border border-[var(--primary)]/30 bg-[var(--primary-soft)]/40 p-5">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -98,12 +130,25 @@ export function QuestionSetManager({ initial }: { initial: SetRow[] }) {
             <Input type="number" min={5} max={25} value={count} onChange={(e) => setCount(Math.max(5, Math.min(25, Number(e.target.value) || 10)))} />
           </label>
         </div>
-        <div className="mt-3 flex items-center gap-3">
-          <Button size="sm" onClick={generate} disabled={busy || !topic.trim()}>
-            {busy ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}Generate set
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="secondary" onClick={autofill} disabled={Boolean(busy)}>
+            {busy === "suggest" ? <LoaderCircle size={13} className="animate-spin" /> : <Wand2 size={13} />}Autofill fields
           </Button>
-          {error && <span className="text-xs text-[var(--critical)]">{error}</span>}
+          <Button size="sm" onClick={generate} disabled={Boolean(busy) || !topic.trim()} className="ml-auto">
+            {busy === "generate" ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}Generate set
+          </Button>
         </div>
+        <p className="mt-1.5 text-[11px] text-[var(--muted)]">Autofill picks a topic you don&apos;t already have and fills the fields. A niche + topic that already exists is refused.</p>
+        {error && <p className="mt-1.5 text-xs text-[var(--critical)]">{error}</p>}
+        {ideas.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {ideas.map((s, i) => (
+              <button key={i} type="button" onClick={() => applyIdea(s)} className="block w-full rounded-[9px] border bg-[var(--surface)] p-2 text-left text-[11px]">
+                <span className="font-medium">{s.topic}</span> <span className="text-[var(--muted)]">· {s.niche} · {s.level} — {s.rationale}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {Object.entries(byNiche).map(([n, rows]) => (

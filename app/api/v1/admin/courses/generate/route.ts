@@ -25,6 +25,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === "GEMINI_NOT_CONFIGURED") return fail("GEMINI_NOT_CONFIGURED", "Set GEMINI_API_KEY first.", 422);
+      if (error.message === "DUPLICATE_COURSE") return fail("DUPLICATE", "A course with that title already exists — pick a different topic.", 409);
       if (error.message.startsWith("GEMINI_")) return fail("GENERATION_FAILED", "Gemini could not build that course — try a more specific topic.", 502);
     }
     return handleApiError(error);

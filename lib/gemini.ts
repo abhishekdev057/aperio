@@ -307,14 +307,16 @@ export async function generateCourse(input: {
   lessonCount?: number;
   audience?: string;
   knownSkills?: string[];
+  avoidTitles?: string[];
 }) {
   const lessonCount = Math.max(4, Math.min(12, input.lessonCount ?? 7));
   const prompt = `Write a complete, self-contained course on: "${input.topic}".
 ${input.audience ? `Audience: ${input.audience}.` : ""}
 Target level: ${input.level ?? "mid"}. Track: ${input.track ?? "technical"}.
 ${input.knownSkills?.length ? `Where relevant, map to these known skill names (use the exact spelling): ${input.knownSkills.slice(0, 60).join(", ")}.` : ""}
+${input.avoidTitles?.length ? `These courses already exist — your "title" MUST be clearly different in scope and wording, not a rephrasing: ${input.avoidTitles.slice(0, 60).join("; ")}.` : ""}
 Rules:
-- Produce exactly ${lessonCount} lessons in a sensible learning order (foundations first).
+- Produce exactly ${lessonCount} lessons in a sensible learning order (foundations first). Every lesson title must be distinct — no two lessons covering the same thing.
 - Each lesson "content" is the actual teaching material the learner reads: 150-320 words of clear prose in simple Markdown (short paragraphs, at most one short list, fenced code only where it genuinely helps). Explain the idea, give a concrete example, and end with a 1-2 sentence "Try this" task. No external links, no fabricated tools, courses, prices, or statistics.
 - "kind" is one of reading | exercise | project | quiz. Use "project" for a build-something lesson, "quiz" only for a self-check lesson whose content lists 3-5 questions with answers, "exercise" for a hands-on drill, otherwise "reading".
 - durationMin is a realistic read/do time (5-45 for reading/exercise/quiz, up to 180 for a project).
@@ -338,18 +340,64 @@ Return JSON only.`;
   return parsed;
 }
 
+/** Suggest one-line practice-set topics for a niche, avoiding what exists. */
+export async function suggestQuestionSetTopics(input: { niche?: string; existing?: string[] }) {
+  const prompt = `Propose 8 distinct multiple-choice practice-set topics${input.niche ? ` in the "${input.niche}" area` : " across engineering, data, product and professional skills"}.
+${input.existing?.length ? `Do NOT repeat or lightly rephrase these existing sets: ${input.existing.slice(0, 60).join("; ")}.` : ""}
+Each: a specific topic string, a short niche word, a level, and a one-line rationale. Titles must be concrete ("HTTP caching semantics", not "Web basics"). Return JSON only.`;
+  return runWithGeminiFallback("question set topics", async (ai, model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction: "You are Aperio's assessment planner. Suggestions are specific and non-overlapping.",
+        maxOutputTokens: 4_000,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          required: ["topics"],
+          properties: {
+            topics: { type: Type.ARRAY, items: { type: Type.OBJECT, required: ["topic", "niche", "level", "rationale"], properties: {
+              topic: { type: Type.STRING },
+              niche: { type: Type.STRING },
+              level: { type: Type.STRING, enum: ["junior", "mid", "senior", "all"] },
+              rationale: { type: Type.STRING },
+            } } },
+          },
+        },
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+    const parsed = parseModelJson(
+      response.text,
+      z.object({
+        topics: z.array(z.object({
+          topic: z.string().min(3).max(160),
+          niche: z.string().min(1).max(60),
+          level: z.enum(["junior", "mid", "senior", "all"]),
+          rationale: z.string().min(6).max(300),
+        })).min(1).max(12),
+      }),
+    );
+    return parsed.topics;
+  });
+}
+
 /** Generate one practice question set (MCQs with explanations) for a niche/topic. */
 export async function generateQuestionSet(input: {
   topic: string;
   niche?: string;
   level?: "junior" | "mid" | "senior" | "all";
   count?: number;
+  avoidTopics?: string[];
 }) {
   const count = Math.max(5, Math.min(25, input.count ?? 10));
   const prompt = `Write a ${count}-question multiple-choice practice set on: "${input.topic}".
 Niche: ${input.niche ?? "General"}. Difficulty: ${input.level ?? "mid"} level.
+${input.avoidTopics?.length ? `Sets already exist for: ${input.avoidTopics.slice(0, 40).join("; ")}. Stay on the requested topic but do not duplicate those.` : ""}
 Rules:
-- Exactly ${count} questions. 4 options each, exactly one correct (correctIndex 0-3).
+- Exactly ${count} questions, every one testing a DIFFERENT point — no two questions that are the same idea reworded.
+- 4 options each, exactly one correct (correctIndex 0-3).
 - Test applied understanding and common mistakes at this level — judgement, trade-offs, debugging — not trivia or memorised syntax.
 - Options are plausible and mutually exclusive; no "all/none of the above"; each option under 30 words.
 - "explanation" (1-3 sentences) says why the correct option is right and, briefly, why a tempting wrong one is wrong.
@@ -369,7 +417,15 @@ Return JSON only.`;
     });
     return parseModelJson(response.text, questionSetSchema);
   });
-  const questions = parsed.questions.filter((q) => q.options.length === 4 && q.correctIndex >= 0 && q.correctIndex < 4);
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, "").replace(/\s+/g, " ").trim();
+  const seen = new Set<string>();
+  const questions = parsed.questions.filter((q) => {
+    if (q.options.length !== 4 || q.correctIndex < 0 || q.correctIndex > 3) return false;
+    const key = norm(q.prompt);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   if (questions.length < 3) throw new Error("GEMINI_EMPTY_QUESTION_SET");
   return { ...parsed, questions };
 }
