@@ -157,7 +157,6 @@ For accepted documents, transcribe meaningful text into extractedText and return
     contents: [{ role: "user", parts }],
     config: {
       systemInstruction: instructions,
-      temperature: 0.1,
       maxOutputTokens: 12_000,
       responseMimeType: "application/json",
       responseSchema: resumeResponseSchema,
@@ -186,7 +185,6 @@ ${JSON.stringify(input)}`;
     contents: prompt,
     config: {
       systemInstruction: "You are Aperio, an evidence-grounded career readiness advisor. Guidance is not an absolute judgment of ability.",
-      temperature: 0.25,
       maxOutputTokens: 8_000,
       responseMimeType: "application/json",
       responseSchema: diagnosticsResponseSchema,
