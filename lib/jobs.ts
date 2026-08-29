@@ -7,6 +7,36 @@ function escapeRe(v: string) {
   return v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Neon's HTTP driver is one request per query and can drop a long run of them.
+async function run(text: string, params: unknown[] = []) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await query(text, params);
+    } catch (error) {
+      const code =
+        (error as { code?: string; cause?: { code?: string } })?.code ??
+        (error as { cause?: { code?: string } })?.cause?.code;
+      const transient = ["UND_ERR_CONNECT_TIMEOUT", "ECONNRESET", "ETIMEDOUT", "EPIPE", "UND_ERR_SOCKET"].includes(code ?? "");
+      if (!transient || attempt >= 5) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 700));
+    }
+  }
+}
+
+function placeholders(rows: number, cols: number) {
+  return Array.from({ length: rows }, (_, r) => `(${Array.from({ length: cols }, (_, c) => `$${r * cols + c + 1}`).join(",")})`).join(",");
+}
+
+async function batchInsert(table: string, columns: string[], rows: unknown[][], onConflict: string, chunk = 40) {
+  for (let i = 0; i < rows.length; i += chunk) {
+    const slice = rows.slice(i, i + chunk);
+    await run(
+      `INSERT INTO ${table} (${columns.join(",")}) VALUES ${placeholders(slice.length, columns.length)} ${onConflict}`,
+      slice.flat(),
+    );
+  }
+}
+
 interface ArbeitnowJob {
   slug?: string;
   title?: string;
@@ -72,6 +102,7 @@ export async function runJobIngestion() {
 
     const counts = new Map<string, number>();
     let scanned = 0;
+    const postingRows: unknown[][] = [];
 
     for (const job of jobs) {
       if (remoteOnly && !job.remote) continue;
@@ -93,37 +124,40 @@ export async function runJobIngestion() {
       }
 
       const description = (job.description ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000);
-      await query(
-        `INSERT INTO job_postings (id, source_id, source_name, external_id, title, company, location, remote, url, description, tags, skill_ids, posted_at, captured_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
-         ON CONFLICT (external_id) DO UPDATE SET
-           title=EXCLUDED.title, company=EXCLUDED.company, location=EXCLUDED.location, remote=EXCLUDED.remote,
-           url=EXCLUDED.url, description=EXCLUDED.description, tags=EXCLUDED.tags, skill_ids=EXCLUDED.skill_ids,
-           captured_at=now()`,
-        [
-          randomUUID(), source.id, source.name, job.slug, job.title.slice(0, 300),
-          (job.company_name ?? "").slice(0, 200) || null, (job.location ?? "").slice(0, 200) || null,
-          Boolean(job.remote), (job.url ?? "").slice(0, 500) || null, description,
-          (job.tags ?? []).slice(0, 30), matched,
-          job.created_at ? new Date(job.created_at * 1000).toISOString() : null,
-        ],
-      );
+      postingRows.push([
+        randomUUID(), source.id, source.name, job.slug, job.title.slice(0, 300),
+        (job.company_name ?? "").slice(0, 200) || null, (job.location ?? "").slice(0, 200) || null,
+        Boolean(job.remote), (job.url ?? "").slice(0, 500) || null, description,
+        (job.tags ?? []).slice(0, 30), matched,
+        job.created_at ? new Date(job.created_at * 1000).toISOString() : null,
+      ]);
       postings += 1;
     }
 
-    for (const [skillId, count] of counts) {
-      const demandIndex = Math.round(Math.min(100, (count / Math.max(scanned, 1)) * 100));
-      await query(
-        `INSERT INTO market_signals (id, skill_id, region, demand_index, posting_count, trend, horizon_days, source, source_id)
-         VALUES ($1,$2,$3,$4,$5,'unknown',30,$6,$7)`,
-        [randomUUID(), skillId, source.region, demandIndex, count, source.name, source.id],
-      );
-      observations += 1;
-    }
+    await batchInsert(
+      "job_postings",
+      ["id", "source_id", "source_name", "external_id", "title", "company", "location", "remote", "url", "description", "tags", "skill_ids", "posted_at"],
+      postingRows,
+      `ON CONFLICT (external_id) DO UPDATE SET
+         title=EXCLUDED.title, company=EXCLUDED.company, location=EXCLUDED.location, remote=EXCLUDED.remote,
+         url=EXCLUDED.url, description=EXCLUDED.description, tags=EXCLUDED.tags, skill_ids=EXCLUDED.skill_ids, captured_at=now()`,
+    );
+
+    const signalRows = [...counts.entries()].map(([skillId, count]) => [
+      randomUUID(), skillId, source.region,
+      Math.round(Math.min(100, (count / Math.max(scanned, 1)) * 100)), count, "unknown", 30, source.name, source.id,
+    ]);
+    await batchInsert(
+      "market_signals",
+      ["id", "skill_id", "region", "demand_index", "posting_count", "trend", "horizon_days", "source", "source_id"],
+      signalRows,
+      "",
+    );
+    observations += signalRows.length;
     details.push(`${source.name}: ${scanned} postings scanned, ${counts.size} skills`);
   }
 
-  await query(`DELETE FROM job_postings WHERE captured_at < now() - ($1 || ' days')::interval`, [String(POSTING_TTL_DAYS)]);
+  await run(`DELETE FROM job_postings WHERE captured_at < now() - ($1 || ' days')::interval`, [String(POSTING_TTL_DAYS)]);
   return { sources: sources.length, postings, observations, details };
 }
 
