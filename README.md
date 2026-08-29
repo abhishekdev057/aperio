@@ -34,6 +34,17 @@ Resume uploads are validated for size, MIME type, and file signature before Gemi
 
 The career match remains deterministic: Aperio searches actual profile/resume evidence, compares it with stored role requirements, assigns transparent levels, and calculates a weighted score. Gemini cannot change the score or classifications; it converts those grounded results into a concise summary and personalized project-oriented roadmap. If career diagnostics are temporarily unavailable, deterministic guidance is used instead.
 
+### Scoring engine
+
+For each role requirement `lib/analyzer.ts` gathers evidence from four sources, in priority order, and keeps the strongest while merging corroborating quotes:
+
+1. **User-verified level** (`user_skills.user_verified`) — authoritative, confidence 1.0.
+2. **Gemini structured extraction** — the résumé's `parsed_data.skills[]` (per-skill `inferredLevel`, `confidence`, evidence quote, `lastUsedYear`), matched onto catalog skills by normalized name/alias. This is OCR/extraction, not scoring — the deterministic engine still does the maths. A skill last used 4+ years ago gets a mild confidence (not level) decay.
+3. **Text inference** over résumé + profile + Gemini-extracted experience/project descriptions — behavioural action language for soft skills, tool/verb signals for technical, with a listed-inventory bump so a "Skills:" line counts as at least working level.
+4. **Skill-graph propagation** (`lib/skill-graph.ts`) — a demonstrated skill lends capped, lower-confidence credit to related ones (PostgreSQL → SQL + data modeling, Next.js → React + JS, Kubernetes → Docker, …). Graph-implied credit never yields a "strong" classification.
+
+The weighted score (`Σ min(level/target, 1)·weight ÷ Σ weight`, ×100) is reported three ways: **overall**, **technical**, and **professional/soft** (`analyses.technical_score` / `soft_score`). Soft-skill requirements carry deliberately lighter weight so they inform the picture without dominating the number, since résumés rarely state them explicitly. Missing evidence is always "not demonstrated", never "does not have it".
+
 ### Soft skills
 
 The skill catalog carries `skill_type` (`technical` or `soft`). Soft skills (communication, collaboration, problem solving, ownership, leadership, mentoring, stakeholder management, adaptability, critical thinking, time management) are scored through the same weighted pipeline, but inference uses behavioural evidence — action language in the resume/profile such as "led a team", "collaborated across", "root-caused", "mentored" — instead of tool keywords. No matching evidence stays "not demonstrated"; it is never read as "the person lacks it".

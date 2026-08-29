@@ -18,7 +18,7 @@ const skills = [
   ["accessibility", "Accessibility", "Frontend", "Makes products usable with keyboards, assistive technology, and diverse needs.", ["accessibility", "wcag", "aria", "a11y"]],
   ["nodejs", "Node.js", "Backend", "Runs JavaScript services, APIs, and background workloads.", ["node.js", "nodejs", "node js"]],
   ["express", "Express", "Backend", "Provides a lightweight HTTP service framework for Node.js.", ["express", "express.js", "expressjs"]],
-  ["rest-apis", "REST APIs", "Backend", "Defines interoperable HTTP interfaces and resource contracts.", ["rest api", "restful", "rest services", "api development"]],
+  ["rest-apis", "REST APIs", "Backend", "Defines interoperable HTTP interfaces and resource contracts.", ["rest api", "rest apis", "restful", "rest services", "api development", "apis", "backend api", "web api", "http api"]],
   ["graphql", "GraphQL", "Backend", "Enables typed, client-directed API queries and schemas.", ["graphql", "apollo server"]],
   ["authentication", "Authentication", "Backend", "Protects identity, sessions, and application access.", ["authentication", "authorization", "oauth", "jwt", "rbac"]],
   ["postgresql", "PostgreSQL", "Database", "Provides durable relational data, indexing, and transactions.", ["postgresql", "postgres", "psql"]],
@@ -29,7 +29,7 @@ const skills = [
   ["sql-optimization", "SQL Optimization", "Database", "Improves query performance using plans, indexes, and schema choices.", ["query optimization", "sql optimization", "database indexing", "explain analyze"]],
   ["git", "Git", "Engineering Practices", "Provides traceable version control and collaborative change management.", ["git", "github", "gitlab", "version control"]],
   ["testing", "Automated Testing", "Engineering Practices", "Protects behavior through repeatable unit, integration, and end-to-end checks.", ["unit testing", "integration testing", "automated testing", "jest", "vitest", "pytest", "cypress", "playwright"]],
-  ["system-design", "System Design", "Engineering Practices", "Shapes reliable components, boundaries, and scaling decisions.", ["system design", "distributed systems", "architecture design"]],
+  ["system-design", "System Design", "Engineering Practices", "Shapes reliable components, boundaries, and scaling decisions.", ["system design", "distributed systems", "architecture design", "software architecture", "application architecture", "system architecture", "architected", "technical design", "designed the architecture", "end-to-end architecture", "scalable architecture", "high-level design"]],
   ["code-review", "Code Review", "Engineering Practices", "Raises quality through structured peer feedback.", ["code review", "pull request review", "peer review"]],
   ["agile", "Agile Delivery", "Engineering Practices", "Coordinates incremental product delivery and team learning.", ["agile", "scrum", "kanban", "sprint planning"]],
   ["docker", "Docker", "DevOps", "Packages applications into consistent, portable runtime environments.", ["docker", "containerization", "containers"]],
@@ -61,10 +61,10 @@ const skills = [
 const softSkills = [
   ["communication", "Communication", "Professional Skills", "Explains ideas, decisions, and trade-offs clearly to technical and non-technical audiences.", ["communication", "communicated", "presented", "presentation", "wrote documentation", "articulated", "explained", "public speaking", "technical writing"]],
   ["collaboration", "Collaboration", "Professional Skills", "Works effectively across roles and teams toward a shared outcome.", ["collaboration", "collaborated", "cross-functional", "cross functional", "partnered with", "worked closely with", "paired with", "team player", "co-ordinated with"]],
-  ["problem-solving", "Problem Solving", "Professional Skills", "Breaks ambiguous problems into workable steps and reaches sound decisions.", ["problem solving", "problem-solving", "root cause", "root-caused", "troubleshot", "debugged", "diagnosed", "resolved", "analysed the issue", "analyzed the issue"]],
-  ["adaptability", "Adaptability", "Professional Skills", "Adjusts quickly to changing priorities, tools, and constraints.", ["adaptability", "adapted", "learned quickly", "picked up", "shifting priorities", "fast-paced", "ambiguity", "pivoted"]],
-  ["ownership", "Ownership & Accountability", "Professional Skills", "Takes end-to-end responsibility for outcomes, not just assigned tasks.", ["ownership", "owned", "end-to-end", "took responsibility", "accountable for", "drove", "delivered", "saw it through"]],
-  ["leadership", "Leadership", "Professional Skills", "Guides direction, sets standards, and enables others to do their best work.", ["leadership", "led", "led a team", "managed a team", "line-managed", "set the direction", "headed", "spearheaded", "chaired"]],
+  ["problem-solving", "Problem Solving", "Professional Skills", "Breaks ambiguous problems into workable steps and reaches sound decisions.", ["problem solving", "problem-solving", "root cause", "root-caused", "troubleshot", "debugged", "diagnosed", "resolved", "automated", "automation", "optimized", "analysed the issue", "analyzed the issue"]],
+  ["adaptability", "Adaptability", "Professional Skills", "Adjusts quickly to changing priorities, tools, and constraints.", ["adaptability", "adapted", "learned quickly", "picked up", "self-taught", "wore multiple hats", "shifting priorities", "fast-paced", "fast-moving", "ambiguity", "pivoted"]],
+  ["ownership", "Ownership & Accountability", "Professional Skills", "Takes end-to-end responsibility for outcomes, not just assigned tasks.", ["ownership", "owned", "end-to-end", "took responsibility", "accountable for", "drove", "delivered", "shipped", "saw it through", "founder", "founded"]],
+  ["leadership", "Leadership", "Professional Skills", "Guides direction, sets standards, and enables others to do their best work.", ["leadership", "led", "led a team", "managed a team", "line-managed", "set the direction", "headed", "spearheaded", "chaired", "founder", "co-founder", "founded", "tech lead", "team lead", "product owner"]],
   ["stakeholder-management", "Stakeholder Management", "Professional Skills", "Aligns expectations and communicates progress with clients, partners, and leadership.", ["stakeholder", "stakeholders", "client-facing", "customer-facing", "liaised", "reported to leadership", "managed expectations", "requirements gathering"]],
   ["mentoring", "Mentoring & Coaching", "Professional Skills", "Grows other people's skills through feedback, pairing, and structured guidance.", ["mentoring", "mentored", "coached", "onboarded", "trained", "gave feedback", "code review feedback", "taught"]],
   ["critical-thinking", "Critical Thinking", "Professional Skills", "Weighs evidence and trade-offs before committing to a course of action.", ["critical thinking", "evaluated trade-offs", "weighed options", "assessed risk", "data-informed", "evidence-based decision", "prioritised based on"]],
@@ -102,56 +102,84 @@ const requirements: Record<string, Requirement[]> = {
 // Applied to every role. Target level still scales with seniority through the
 // junior/mid/senior offset below, so "leadership" is target 1 for a junior and
 // target 3 for a senior.
+// Soft skills carry deliberately lighter weight than technical requirements:
+// a résumé rarely states them explicitly, so they inform the picture without
+// dominating the score. They surface as a separate "professional readiness"
+// number in the report.
 const softRequirements: Requirement[] = [
-  ["problem-solving", "critical", 8],
-  ["communication", "high", 7],
-  ["collaboration", "high", 7],
-  ["ownership", "high", 6],
-  ["adaptability", "medium", 5],
-  ["critical-thinking", "medium", 5],
-  ["time-management", "medium", 4],
-  ["stakeholder-management", "medium", 4],
-  ["leadership", "medium", 4],
-  ["mentoring", "optional", 3],
+  ["problem-solving", "high", 5],
+  ["communication", "medium", 4],
+  ["collaboration", "medium", 4],
+  ["ownership", "medium", 3],
+  ["adaptability", "medium", 3],
+  ["critical-thinking", "medium", 3],
+  ["time-management", "medium", 2],
+  ["stakeholder-management", "medium", 2],
+  ["leadership", "optional", 2],
+  ["mentoring", "optional", 2],
 ];
 
-async function main() {
-const allSkills = [
-  ...skills.map(([slug, name, category, description, aliases]) => ({ slug, name, category, description, aliases, type: "technical" as const })),
-  ...softSkills.map(([slug, name, category, description, aliases]) => ({ slug, name, category, description, aliases, type: "soft" as const })),
-];
-for (const { slug, name, category, description, aliases, type } of allSkills) {
-  await sql.query(
-    `INSERT INTO skills (id, slug, name, category, description, aliases, skill_type)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
-     ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name, category=EXCLUDED.category, description=EXCLUDED.description, aliases=EXCLUDED.aliases, skill_type=EXCLUDED.skill_type, updated_at=now()`,
-    [`skill-${slug}`, slug, name, category, description, aliases, type],
-  );
-}
-
-for (const [slug, title, description, category] of roles) {
-  await sql.query(
-    `INSERT INTO roles (id, slug, title, description, category)
-     VALUES ($1,$2,$3,$4,$5)
-     ON CONFLICT (slug) DO UPDATE SET title=EXCLUDED.title, description=EXCLUDED.description, category=EXCLUDED.category, updated_at=now()`,
-    [`role-${slug}`, slug, title, description, category],
-  );
-
-  for (const [skillSlug, importance, weight] of [...requirements[slug], ...softRequirements]) {
-    for (const [level, targetOffset] of [["junior", -1], ["mid", 0], ["senior", 1]] as const) {
-      const midTarget = importance === "critical" ? 3 : importance === "high" ? 2 : 2;
-      const target = Math.max(1, Math.min(4, midTarget + targetOffset));
-      await sql.query(
-        `INSERT INTO role_skill_requirements (id, role_id, skill_id, target_level, importance, experience_level, weight)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
-         ON CONFLICT (role_id, skill_id, experience_level) DO UPDATE SET target_level=EXCLUDED.target_level, importance=EXCLUDED.importance, weight=EXCLUDED.weight`,
-        [`req-${slug}-${skillSlug}-${level}`, `role-${slug}`, `skill-${skillSlug}`, target, importance, level, weight],
-      );
+// Neon's HTTP driver does one request per query; the serverless pooler will
+// occasionally drop a long run of them. Retry transient failures, and batch the
+// bulk inserts into a handful of multi-row statements.
+async function run(text: string, params: unknown[]) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await sql.query(text, params);
+    } catch (error) {
+      const code = (error as { code?: string; cause?: { code?: string } })?.code ?? (error as { cause?: { code?: string } })?.cause?.code;
+      const transient = code === "ECONNRESET" || code === "ETIMEDOUT" || code === "EPIPE" || code === "UND_ERR_SOCKET";
+      if (!transient || attempt >= 5) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 500));
     }
   }
 }
 
-console.log(`Seeded ${skills.length} technical + ${softSkills.length} soft skills and ${roles.length} roles.`);
+function placeholders(rows: number, cols: number) {
+  return Array.from({ length: rows }, (_, r) => `(${Array.from({ length: cols }, (_, c) => `$${r * cols + c + 1}`).join(",")})`).join(",");
+}
+
+async function main() {
+  const allSkills = [
+    ...skills.map(([slug, name, category, description, aliases]) => ({ slug, name, category, description, aliases, type: "technical" as const })),
+    ...softSkills.map(([slug, name, category, description, aliases]) => ({ slug, name, category, description, aliases, type: "soft" as const })),
+  ];
+  const skillParams = allSkills.flatMap((s) => [`skill-${s.slug}`, s.slug, s.name, s.category, s.description, s.aliases, s.type]);
+  await run(
+    `INSERT INTO skills (id, slug, name, category, description, aliases, skill_type)
+     VALUES ${placeholders(allSkills.length, 7)}
+     ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name, category=EXCLUDED.category, description=EXCLUDED.description,
+       aliases=EXCLUDED.aliases, skill_type=EXCLUDED.skill_type, updated_at=now()`,
+    skillParams,
+  );
+
+  const roleParams = roles.flatMap(([slug, title, description, category]) => [`role-${slug}`, slug, title, description, category]);
+  await run(
+    `INSERT INTO roles (id, slug, title, description, category)
+     VALUES ${placeholders(roles.length, 5)}
+     ON CONFLICT (slug) DO UPDATE SET title=EXCLUDED.title, description=EXCLUDED.description, category=EXCLUDED.category, updated_at=now()`,
+    roleParams,
+  );
+
+  for (const [slug] of roles) {
+    const rows: unknown[][] = [];
+    for (const [skillSlug, importance, weight] of [...requirements[slug], ...softRequirements]) {
+      for (const [level, targetOffset] of [["junior", -1], ["mid", 0], ["senior", 1]] as const) {
+        const midTarget = importance === "critical" ? 3 : importance === "high" ? 2 : 2;
+        const target = Math.max(1, Math.min(4, midTarget + targetOffset));
+        rows.push([`req-${slug}-${skillSlug}-${level}`, `role-${slug}`, `skill-${skillSlug}`, target, importance, level, weight]);
+      }
+    }
+    await run(
+      `INSERT INTO role_skill_requirements (id, role_id, skill_id, target_level, importance, experience_level, weight)
+       VALUES ${placeholders(rows.length, 7)}
+       ON CONFLICT (role_id, skill_id, experience_level)
+       DO UPDATE SET target_level=EXCLUDED.target_level, importance=EXCLUDED.importance, weight=EXCLUDED.weight`,
+      rows.flat(),
+    );
+  }
+
+  console.log(`Seeded ${skills.length} technical + ${softSkills.length} soft skills and ${roles.length} roles.`);
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });

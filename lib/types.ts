@@ -53,6 +53,7 @@ export interface AnalysisSkill {
   confidence: number;
   importance: Importance;
   evidence: Array<{ quote: string; source: string }>;
+  evidenceBasis?: string;
   recommendation: string;
   whyItMatters: string;
 }
@@ -63,6 +64,8 @@ export interface AnalysisReport {
   roleTitle: string;
   experienceLevel: ExperienceLevel;
   overallScore: number;
+  technicalScore: number | null;
+  softScore: number | null;
   summary: string;
   matchedCount: number;
   developingCount: number;

@@ -20,7 +20,8 @@ export async function getRoles(userId?: string) {
 export async function getAnalysisReport(userId: string, analysisId: string): Promise<AnalysisReport | null> {
   const report = await one<Omit<AnalysisReport, "skills"> & Record<string, unknown>>(
     `SELECT a.id,a.role_id AS "roleId",r.title AS "roleTitle",a.experience_level AS "experienceLevel",
-      a.overall_score AS "overallScore",a.summary,a.matched_count AS "matchedCount",
+      a.overall_score AS "overallScore",a.technical_score AS "technicalScore",a.soft_score AS "softScore",
+      a.summary,a.matched_count AS "matchedCount",
       a.developing_count AS "developingCount",a.missing_count AS "missingCount",
       rs.filename AS "resumeFilename",rs.validation_confidence AS "resumeValidationConfidence",a.created_at AS "createdAt"
      FROM analyses a JOIN roles r ON r.id=a.role_id LEFT JOIN resumes rs ON rs.id=a.resume_id
@@ -31,7 +32,7 @@ export async function getAnalysisReport(userId: string, analysisId: string): Pro
   const skills = await query<AnalysisSkill & Record<string, unknown>>(
     `SELECT ar.id,ar.skill_id AS "skillId",s.name,s.category,s.description,s.skill_type AS "skillType",ar.classification,
       ar.current_level AS "currentLevel",ar.target_level AS "targetLevel",ar.confidence,ar.importance,
-      ar.evidence,ar.recommendation,ar.why_it_matters AS "whyItMatters"
+      ar.evidence,ar.evidence_basis AS "evidenceBasis",ar.recommendation,ar.why_it_matters AS "whyItMatters"
      FROM analysis_skill_results ar JOIN skills s ON s.id=ar.skill_id
      WHERE ar.analysis_id=$1
      ORDER BY CASE ar.classification WHEN 'missing' THEN 1 WHEN 'developing' THEN 2 ELSE 3 END,
@@ -49,7 +50,8 @@ export async function getLatestReport(userId: string) {
 export async function getAnalysisHistory(userId: string, limit = 20, offset = 0) {
   return query<Record<string, unknown>>(
     `SELECT a.id,r.title AS "roleTitle",r.slug AS "roleSlug",a.experience_level AS "experienceLevel",
-      a.overall_score AS "overallScore",a.matched_count AS "matchedCount",a.developing_count AS "developingCount",
+      a.overall_score AS "overallScore",a.technical_score AS "technicalScore",a.soft_score AS "softScore",
+      a.matched_count AS "matchedCount",a.developing_count AS "developingCount",
       a.missing_count AS "missingCount",a.created_at AS "createdAt"
      FROM analyses a JOIN roles r ON r.id=a.role_id WHERE a.user_id=$1 ORDER BY a.created_at DESC LIMIT $2 OFFSET $3`,
     [userId, limit, offset],

@@ -12,6 +12,10 @@ Aperio deliberately separates deterministic scoring from generative guidance.
 
 This boundary prevents a model response from fabricating a higher score, changing historical data, or claiming evidence that is not present.
 
+### Evidence gathering (`lib/analyzer.ts`)
+
+Per requirement, evidence is taken from the strongest of: user-verified level → Gemini's structured `parsed_data.skills[]` extraction (matched by normalized name/alias; recency-decayed confidence) → text inference over résumé/profile/extracted experience → skill-graph propagation (`lib/skill-graph.ts`, capped credit, never "strong"). The weighted score is reported as overall / technical / soft; soft requirements are weighted light because résumés rarely state them. Consuming Gemini's per-skill extraction is OCR, not scoring — the deterministic engine still computes every level, classification, and number.
+
 ## Resume intelligence
 
 The upload route performs layered validation:
