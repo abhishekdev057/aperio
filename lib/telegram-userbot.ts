@@ -252,6 +252,7 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
             /* leave media undownloaded */
           }
         }
+        const at = msg.date ? new Date(msg.date * 1000) : new Date();
         const saved = await recordMessage({
           threadId,
           direction: msg.out ? "out" : "in",
@@ -264,9 +265,16 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
           mediaSize,
           senderName: msg.out ? "You" : name,
           status: msg.out ? "sent" : "delivered",
-          at: msg.date ? new Date(msg.date * 1000) : new Date(),
+          at,
         });
-        if (saved) stored += 1;
+        if (saved) {
+          stored += 1;
+          // auto-reply only to fresh inbound text, never to a backlog
+          if (!msg.out && msg.message && Date.now() - at.getTime() < 12 * 60_000) {
+            const { maybeAutoReply } = await import("@/lib/assistant");
+            void maybeAutoReply(threadId, msg.message);
+          }
+        }
       }
     }
     await query(`UPDATE chat_sync_state SET running=false, detail=$1, synced_at=now() WHERE channel='telegram_userbot'`, [`ok, ${stored} new`]);

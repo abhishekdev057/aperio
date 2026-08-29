@@ -142,3 +142,33 @@ export async function sendWhatsAppMedia(to: string, mediaId: string, mime: strin
   if (!res.ok) throw new Error(waFailure("WHATSAPP_SEND_FAILED", json?.error, res.status));
   return { externalId: json.messages?.[0]?.id ?? null };
 }
+
+/** A "poll" on WhatsApp: reply buttons (<=3 options) or a list (<=10). */
+export async function sendWhatsAppPoll(to: string, question: string, options: string[]) {
+  const cfg = await getWhatsAppConfig();
+  if (!cfg.configured) throw new Error("WHATSAPP_NOT_CONFIGURED");
+  const opts = options.slice(0, 10);
+  const interactive: Record<string, unknown> =
+    opts.length <= 3
+      ? {
+          type: "button",
+          body: { text: question.slice(0, 1024) },
+          action: { buttons: opts.map((o, i) => ({ type: "reply", reply: { id: `opt_${i}`, title: o.slice(0, 20) } })) },
+        }
+      : {
+          type: "list",
+          body: { text: question.slice(0, 1024) },
+          action: {
+            button: "Choose",
+            sections: [{ title: "Options", rows: opts.map((o, i) => ({ id: `opt_${i}`, title: o.slice(0, 24) })) }],
+          },
+        };
+  const res = await fetch(`${GRAPH}/${cfg.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${cfg.accessToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", to: to.replace(/[^\d]/g, ""), type: "interactive", interactive }),
+  });
+  const json = (await res.json().catch(() => ({}))) as { error?: WaError; messages?: Array<{ id?: string }> };
+  if (!res.ok) throw new Error(waFailure("WHATSAPP_POLL_FAILED", json?.error, res.status));
+  return json.messages?.[0]?.id ?? null;
+}

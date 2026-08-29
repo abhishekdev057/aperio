@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
-import { recordMessage, updateMessageStatus, upsertThread, type MessageKind } from "@/lib/chat";
+import { maybeAutoReply } from "@/lib/assistant";
+import { recordMessage, recordPollVote, updateMessageStatus, upsertThread, type MessageKind } from "@/lib/chat";
 import { parseLinkCode } from "@/lib/telegram";
 import { getWhatsAppConfig, sendWhatsAppText, verifyWhatsAppSignature } from "@/lib/whatsapp";
 
@@ -26,6 +27,11 @@ interface WaMessage {
   document?: WaMediaObj;
   voice?: WaMediaObj;
   sticker?: WaMediaObj;
+  interactive?: {
+    type?: string;
+    button_reply?: { id?: string; title?: string };
+    list_reply?: { id?: string; title?: string };
+  };
 }
 interface WaStatus {
   id?: string;
@@ -96,13 +102,25 @@ export async function POST(request: Request) {
 async function handleInbound(msg: WaMessage, nameByWaId: Map<string | undefined, string | undefined>, request: Request) {
   const from = String(msg.from || "").replace(/\D/g, "");
   if (!from || !msg.type) return;
+  const displayName = nameByWaId.get(from) ?? `+${from}`;
+  const threadId = await upsertThread({ channel: "whatsapp", peerId: from, peerName: displayName });
+
+  // Poll / quick-reply answer.
+  if (msg.type === "interactive") {
+    const choice = msg.interactive?.button_reply?.title ?? msg.interactive?.list_reply?.title ?? "";
+    if (choice) {
+      await recordMessage({ threadId, direction: "in", externalId: msg.id ?? null, kind: "text", text: `Voted: ${choice}`, senderName: displayName, status: "delivered" });
+      await recordPollVote(threadId, from, choice);
+    }
+    return;
+  }
+
   const kind = KIND_MAP[msg.type] ?? "system";
   const mediaObj = (msg.image || msg.audio || msg.video || msg.document || msg.voice || msg.sticker) as WaMediaObj | undefined;
   const bodyText = msg.text?.body ?? mediaObj?.caption ?? null;
   const at = msg.timestamp ? new Date(Number(msg.timestamp) * 1000) : new Date();
 
-  const threadId = await upsertThread({ channel: "whatsapp", peerId: from, peerName: nameByWaId.get(from) ?? `+${from}` });
-  await recordMessage({
+  const saved = await recordMessage({
     threadId,
     direction: "in",
     externalId: msg.id ?? null,
@@ -111,14 +129,17 @@ async function handleInbound(msg: WaMessage, nameByWaId: Map<string | undefined,
     mediaMime: mediaObj?.mime_type ?? null,
     mediaName: mediaObj?.filename ?? null,
     providerRef: mediaObj?.id ? { waMediaId: mediaObj.id } : null,
-    senderName: nameByWaId.get(from) ?? `+${from}`,
+    senderName: displayName,
     status: "delivered",
     at,
   });
 
   // Link-code flow for plain text that looks like a code.
   const code = kind === "text" ? parseLinkCode(bodyText ?? undefined) : null;
-  if (!code) return;
+  if (!code) {
+    if (saved && kind === "text" && bodyText) void maybeAutoReply(threadId, bodyText);
+    return;
+  }
   const rows = await query<{ id: string; userId: string } & Record<string, unknown>>(
     `UPDATE messaging_channels
      SET status='linked', address=$1, handle=$2, link_code=NULL, link_code_expires_at=NULL, verified_at=now(), updated_at=now()

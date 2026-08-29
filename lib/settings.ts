@@ -4,6 +4,7 @@ import { one, query } from "@/lib/db";
 import { decryptSecret, encryptSecret, isEncryptionConfigured, maskSecret } from "@/lib/crypto";
 
 export type IntegrationKey =
+  | "assistant"
   | "email.smtp"
   | "telegram.bot"
   | "telegram.userbot"
@@ -31,6 +32,15 @@ export interface IntegrationSchema {
 }
 
 export const INTEGRATION_SCHEMAS: IntegrationSchema[] = [
+  {
+    key: "assistant",
+    title: "AI assistant (auto-reply)",
+    description: "When a user messages your WhatsApp or Telegram, Aperio replies automatically using Gemini with your product context and that user's own analysis, roadmap, course and job matches. Uses the same GEMINI_API_KEY.",
+    fields: [
+      { name: "enabled", label: "Auto-reply on? (true/false)", secret: false, optional: true, placeholder: "true" },
+      { name: "linkedOnly", label: "Only reply to signed-up users? (true/false)", secret: false, optional: true, placeholder: "true", help: "false = also reply to unknown numbers." },
+    ],
+  },
   {
     key: "email.smtp",
     title: "Email — SMTP",

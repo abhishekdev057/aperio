@@ -428,3 +428,37 @@ Return JSON only.`;
     return parseModelJson(response.text, practiceSchema);
   });
 }
+
+export async function assistantReply(input: {
+  channel: string;
+  userContext: string;
+  history: Array<{ role: "user" | "model"; text: string }>;
+  message: string;
+}) {
+  const system = `You are Aperio's assistant, replying to a user on ${input.channel}.
+Aperio is an evidence-based career skill-gap analyzer: it compares a user's résumé/profile against a target role, gives an evidence-linked skill breakdown with a technical and a professional (soft) readiness score, a weekly course plan, targeted practice, optional skill tests, and matched job openings.
+Rules:
+- Be warm, concrete and brief — this is a chat message, not an email. 1-2 short paragraphs, no headings, no markdown tables.
+- Use ONLY the user context below for anything specific about them. Never invent scores, gaps, jobs, dates, or progress.
+- If they ask something you can't answer from the context, say what they can do in the app (e.g. "run an analysis", "open your roadmap") with the relevant section name.
+- Never give a definitive verdict on their ability; frame gaps as "not yet demonstrated".
+- If the message is casual (hi/thanks), reply naturally and briefly.
+- No links unless the user context contains one.
+
+USER CONTEXT:
+${input.userContext}`;
+
+  const contents = [
+    ...input.history.slice(-10).map((h) => ({ role: h.role, parts: [{ text: h.text }] })),
+    { role: "user" as const, parts: [{ text: input.message }] },
+  ];
+
+  return runWithGeminiFallback("assistant reply", async (ai, model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents,
+      config: { systemInstruction: system, maxOutputTokens: 900, temperature: 0.6 },
+    });
+    return (response.text ?? "").trim();
+  });
+}

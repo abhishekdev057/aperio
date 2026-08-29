@@ -1,8 +1,9 @@
 import "server-only";
 
-import { getThreadForSend, recordMessage, storeMedia, updateMessageStatus, type MessageKind } from "@/lib/chat";
+import { createPoll, getThreadForSend, recordMessage, storeMedia, updateMessageStatus, type MessageKind } from "@/lib/chat";
+import { sendTelegramMessage, sendTelegramPoll } from "@/lib/telegram";
 import { sendUserbotMessage } from "@/lib/telegram-userbot";
-import { getWhatsAppConfig, sendWhatsAppMedia, sendWhatsAppText, uploadWhatsAppMedia } from "@/lib/whatsapp";
+import { getWhatsAppConfig, sendWhatsAppMedia, sendWhatsAppPoll, sendWhatsAppText, uploadWhatsAppMedia } from "@/lib/whatsapp";
 
 function kindForMime(mime: string): MessageKind {
   if (mime.startsWith("image/")) return "image";
@@ -38,24 +39,58 @@ export async function sendChatMessage(
   try {
     let externalId: string | null = null;
     if (thread.channel === "telegram_userbot") {
-      const res = await sendUserbotMessage(threadId, { text: input.text, file: input.file });
-      externalId = res.externalId;
+      externalId = (await sendUserbotMessage(threadId, { text: input.text, file: input.file })).externalId;
+    } else if (thread.channel === "telegram_bot") {
+      if (input.file) throw new Error("Attachments aren't supported on bot-linked Telegram yet.");
+      await sendTelegramMessage(thread.peerId, input.text ?? "");
     } else if (thread.channel === "whatsapp") {
       const cfg = await getWhatsAppConfig();
       if (!cfg.configured) throw new Error("WHATSAPP_NOT_CONFIGURED");
       if (input.file) {
         const mid = await uploadWhatsAppMedia(input.file.data, input.file.mime, input.file.name);
-        const res = await sendWhatsAppMedia(thread.peerId, mid, input.file.mime, { caption: input.text, filename: input.file.name });
-        externalId = res.externalId;
+        externalId = (await sendWhatsAppMedia(thread.peerId, mid, input.file.mime, { caption: input.text, filename: input.file.name })).externalId;
       } else {
-        const res = await sendWhatsAppText(thread.peerId, input.text ?? "");
-        externalId = res.externalId;
+        externalId = (await sendWhatsAppText(thread.peerId, input.text ?? "")).externalId;
       }
     }
     await updateMessageStatus(messageId!, "sent");
     return { id: messageId, externalId, status: "sent" as const };
   } catch (error) {
     const detail = error instanceof Error ? error.message : "send failed";
+    if (messageId) await updateMessageStatus(messageId, "failed", detail);
+    throw new Error(detail);
+  }
+}
+
+export async function sendChatPoll(threadId: string, question: string, options: string[], createdBy?: string) {
+  const thread = await getThreadForSend(threadId);
+  if (!thread) throw new Error("THREAD_NOT_FOUND");
+  const clean = options.map((o) => o.trim()).filter(Boolean).slice(0, 10);
+  if (!question.trim() || clean.length < 2) throw new Error("A poll needs a question and at least two options.");
+
+  const messageId = await recordMessage({
+    threadId,
+    direction: "out",
+    kind: "system",
+    text: `📊 Poll: ${question.trim()}\n${clean.map((o, i) => `${i + 1}. ${o}`).join("\n")}`,
+    senderName: "You",
+    status: "pending",
+  });
+
+  let externalId: string | null = null;
+  try {
+    if (thread.channel === "telegram_userbot") {
+      externalId = await sendUserbotMessage(threadId, { text: `📊 ${question.trim()}\n\n${clean.map((o, i) => `${i + 1}. ${o}`).join("\n")}\n\nReply with the number.` }).then((r) => r.externalId);
+    } else if (thread.channel === "telegram_bot") {
+      externalId = await sendTelegramPoll(thread.peerId, question.trim(), clean);
+    } else if (thread.channel === "whatsapp") {
+      externalId = await sendWhatsAppPoll(thread.peerId, question.trim(), clean);
+    }
+    await updateMessageStatus(messageId!, "sent");
+    await createPoll({ threadId, messageId, channel: thread.channel, externalId, question, options: clean, createdBy: createdBy ?? null });
+    return { id: messageId, externalId };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "poll send failed";
     if (messageId) await updateMessageStatus(messageId, "failed", detail);
     throw new Error(detail);
   }

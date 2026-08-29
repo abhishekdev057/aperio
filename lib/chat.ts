@@ -5,7 +5,7 @@ import { one, query } from "@/lib/db";
 
 export const MAX_MEDIA_BYTES = 20 * 1024 * 1024;
 
-export type ChatChannel = "telegram_userbot" | "whatsapp";
+export type ChatChannel = "telegram_userbot" | "telegram_bot" | "whatsapp";
 export type MessageKind = "text" | "image" | "audio" | "voice" | "video" | "file" | "sticker" | "system";
 
 function previewFor(kind: MessageKind, text: string | null) {
@@ -22,7 +22,7 @@ async function linkUser(channel: ChatChannel, peerId: string, peerUsername?: str
     );
     if (row) return row.userId;
   }
-  if (channel === "telegram_userbot") {
+  if (channel === "telegram_userbot" || channel === "telegram_bot") {
     const row = await one<{ userId: string }>(
       `SELECT user_id AS "userId" FROM messaging_channels WHERE platform='telegram' AND address = $1 LIMIT 1`,
       [peerId],
@@ -143,8 +143,8 @@ export async function updateMessageStatus(id: string, status: string, error?: st
   await query(`UPDATE chat_messages SET status=$2, error=$3 WHERE id=$1`, [id, status, error ?? null]);
 }
 
-export async function listThreads(opts: { channel?: ChatChannel | "all"; q?: string } = {}) {
-  const channel = opts.channel && opts.channel !== "all" ? opts.channel : null;
+export async function listThreads(opts: { channel?: string; q?: string } = {}) {
+  const c = opts.channel && opts.channel !== "all" ? opts.channel : null;
   const like = opts.q ? `%${opts.q.toLowerCase()}%` : null;
   return query<Record<string, unknown>>(
     `SELECT t.id, t.channel, t.peer_id AS "peerId", t.peer_name AS "peerName", t.peer_username AS "peerUsername",
@@ -152,12 +152,14 @@ export async function listThreads(opts: { channel?: ChatChannel | "all"; q?: str
        t.last_message_at AS "lastMessageAt", t.last_message_preview AS "lastPreview", t.last_direction AS "lastDirection",
        t.unread_count AS "unreadCount", t.archived
      FROM chat_threads t LEFT JOIN users u ON u.id = t.user_id
-     WHERE ($1::text IS NULL OR t.channel = $1)
+     WHERE ($1::text IS NULL
+            OR ($1 = 'telegram' AND t.channel LIKE 'telegram\\_%')
+            OR t.channel = $1)
        AND ($2::text IS NULL OR lower(COALESCE(t.peer_name,'')) LIKE $2 OR lower(COALESCE(t.peer_username,'')) LIKE $2
             OR lower(COALESCE(u.full_name,'')) LIKE $2 OR lower(COALESCE(u.email,'')) LIKE $2 OR t.peer_id LIKE $2)
      ORDER BY t.last_message_at DESC NULLS LAST
      LIMIT 200`,
-    [channel, like],
+    [c, like],
   );
 }
 
@@ -206,4 +208,51 @@ export async function maxExternalId(threadId: string) {
     [threadId],
   );
   return row?.ext ? Number(row.ext) : 0;
+}
+
+// --- polls ---------------------------------------------------------------
+
+export async function createPoll(input: {
+  threadId: string;
+  messageId: string | null;
+  channel: string;
+  externalId?: string | null;
+  question: string;
+  options: string[];
+  createdBy?: string | null;
+}) {
+  const id = randomUUID();
+  await query(
+    `INSERT INTO chat_polls (id, thread_id, message_id, channel, external_id, question, options, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)`,
+    [id, input.threadId, input.messageId ?? null, input.channel, input.externalId ?? null, input.question.slice(0, 400), JSON.stringify(input.options.slice(0, 12)), input.createdBy ?? null],
+  );
+  return id;
+}
+
+/** Record a vote against the most recent poll in the thread (WhatsApp buttons / Telegram poll answers). */
+export async function recordPollVote(threadId: string, voter: string, optionText: string, optionIndex?: number) {
+  const poll = await one<{ id: string; options: string[] }>(
+    `SELECT id, options FROM chat_polls WHERE thread_id=$1 ORDER BY created_at DESC LIMIT 1`,
+    [threadId],
+  );
+  if (!poll) return;
+  const idx = optionIndex ?? poll.options.findIndex((o) => o.toLowerCase() === optionText.toLowerCase());
+  await query(
+    `INSERT INTO chat_poll_votes (id, poll_id, voter, option_index, option_text)
+     VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (poll_id, voter) DO UPDATE SET option_index=EXCLUDED.option_index, option_text=EXCLUDED.option_text, created_at=now()`,
+    [randomUUID(), poll.id, voter, idx >= 0 ? idx : null, optionText.slice(0, 200)],
+  );
+}
+
+export async function getThreadPolls(threadId: string) {
+  return query<Record<string, unknown>>(
+    `SELECT p.id, p.question, p.options, p.created_at AS "createdAt",
+       COALESCE(json_agg(json_build_object('voter', v.voter, 'optionIndex', v.option_index, 'optionText', v.option_text))
+                FILTER (WHERE v.id IS NOT NULL), '[]') AS votes
+     FROM chat_polls p LEFT JOIN chat_poll_votes v ON v.poll_id = p.id
+     WHERE p.thread_id=$1 GROUP BY p.id ORDER BY p.created_at DESC LIMIT 20`,
+    [threadId],
+  );
 }

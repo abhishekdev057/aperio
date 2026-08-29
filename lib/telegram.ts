@@ -63,6 +63,25 @@ export async function sendTelegramMessage(chatId: string, text: string, opts: { 
   return json;
 }
 
+export async function sendTelegramPoll(chatId: string, question: string, options: string[]) {
+  const { token } = await getTelegramConfig();
+  if (!token) throw new Error("TELEGRAM_NOT_CONFIGURED");
+  const response = await fetch(`${API_BASE}/bot${token}/sendPoll`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      question: question.slice(0, 300),
+      options: options.slice(0, 10).map((o) => o.slice(0, 100)),
+      is_anonymous: false,
+      allows_multiple_answers: false,
+    }),
+  });
+  const json = (await response.json().catch(() => ({}))) as { ok?: boolean; description?: string; result?: { poll?: { id?: string } } };
+  if (!response.ok || !json.ok) throw new Error(`TELEGRAM_POLL_FAILED: ${json.description || response.status}`);
+  return json.result?.poll?.id ?? null;
+}
+
 export async function telegramGetMe() {
   const { token } = await getTelegramConfig();
   if (!token) throw new Error("TELEGRAM_NOT_CONFIGURED");

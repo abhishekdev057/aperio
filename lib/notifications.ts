@@ -49,7 +49,13 @@ async function linkedChannels(userId: string): Promise<LinkedChannel[]> {
   return channels;
 }
 
-async function deliver(channel: LinkedChannel, text: string) {
+interface EmailContent {
+  subject: string;
+  html: string;
+  text?: string;
+}
+
+async function deliver(channel: LinkedChannel, text: string, email?: EmailContent) {
   if (channel.platform === "telegram") {
     if (channel.via === "userbot") {
       const { sendUserbotDirect } = await import("@/lib/telegram-userbot");
@@ -68,8 +74,8 @@ async function deliver(channel: LinkedChannel, text: string) {
   }
   if (channel.platform === "email") {
     const { sendEmail, notificationEmail } = await import("@/lib/email");
-    const { subject, html } = notificationEmail(text);
-    await sendEmail(channel.address, subject, html, text.replace(/<\/?b>/g, ""));
+    const content = email ?? notificationEmail(text);
+    await sendEmail(channel.address, content.subject, content.html, content.text ?? text.replace(/<\/?b>/g, ""));
     return;
   }
   throw new Error("UNKNOWN_CHANNEL");
@@ -84,6 +90,7 @@ export async function dispatch(input: {
   kind: NotificationKind;
   dedupeKey: string;
   text: string;
+  email?: EmailContent;
 }): Promise<"sent" | "skipped" | "failed" | "no_channel"> {
   const claim = await query<{ id: string }>(
     `INSERT INTO notification_log (id, user_id, kind, dedupe_key, status)
@@ -105,7 +112,7 @@ export async function dispatch(input: {
   const errors: string[] = [];
   for (const channel of channels) {
     try {
-      await deliver(channel, input.text);
+      await deliver(channel, input.text, input.email);
       anySent = true;
     } catch (error) {
       errors.push(`${channel.platform}: ${error instanceof Error ? error.message : "error"}`);
@@ -134,20 +141,47 @@ function isoWeek(date = new Date()) {
 // --- Event-driven ------------------------------------------------------------
 
 export async function notifyAnalysisReady(userId: string, analysisId: string) {
-  const row = await query<{ roleTitle: string; overallScore: number; missingCount: number } & Record<string, unknown>>(
-    `SELECT r.title AS "roleTitle", a.overall_score AS "overallScore", a.missing_count AS "missingCount"
-     FROM analyses a JOIN roles r ON r.id=a.role_id WHERE a.id=$1 AND a.user_id=$2`,
+  const row = await query<{
+    firstName: string; roleTitle: string; overallScore: number; technicalScore: number | null; softScore: number | null;
+    matchedCount: number; developingCount: number; missingCount: number;
+  } & Record<string, unknown>>(
+    `SELECT split_part(u.full_name,' ',1) AS "firstName", r.title AS "roleTitle",
+       a.overall_score AS "overallScore", a.technical_score AS "technicalScore", a.soft_score AS "softScore",
+       a.matched_count AS "matchedCount", a.developing_count AS "developingCount", a.missing_count AS "missingCount"
+     FROM analyses a JOIN roles r ON r.id=a.role_id JOIN users u ON u.id=a.user_id
+     WHERE a.id=$1 AND a.user_id=$2`,
     [analysisId, userId],
   );
   const analysis = row[0];
   if (!analysis) return;
-  const prefOn = await prefEnabled(userId, "analysis");
-  if (!prefOn) return;
+  if (!(await prefEnabled(userId, "analysis"))) return;
+
+  const gaps = await query<{ name: string }>(
+    `SELECT s.name FROM analysis_skill_results ar JOIN skills s ON s.id=ar.skill_id
+     WHERE ar.analysis_id=$1 AND ar.classification <> 'strong'
+     ORDER BY CASE ar.importance WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 4`,
+    [analysisId],
+  );
+  const topGaps = gaps.map((g) => g.name);
+
   const text =
     `<b>Aperio — analysis ready</b>\n` +
-    `${analysis.roleTitle}: match ${analysis.overallScore}/100, ${analysis.missingCount} skill gap(s) to close.\n` +
-    `Open your report and tailored plan in the workspace.`;
-  await dispatch({ userId, kind: "analysis", dedupeKey: `analysis:${analysisId}`, text });
+    `${analysis.roleTitle}: ${analysis.overallScore}/100 (technical ${analysis.technicalScore ?? "—"}, professional ${analysis.softScore ?? "—"}).\n` +
+    `${analysis.missingCount} gap(s) to close${topGaps.length ? `: ${topGaps.join(", ")}` : ""}.\nOpen your report and plan in Aperio.`;
+
+  const { buildNotificationEmail } = await import("@/lib/email");
+  const email = buildNotificationEmail("analysis", {
+    firstName: analysis.firstName || undefined,
+    roleTitle: analysis.roleTitle,
+    overall: analysis.overallScore,
+    technical: analysis.technicalScore,
+    soft: analysis.softScore,
+    matched: analysis.matchedCount,
+    developing: analysis.developingCount,
+    missing: analysis.missingCount,
+    topGaps,
+  });
+  await dispatch({ userId, kind: "analysis", dedupeKey: `analysis:${analysisId}`, text, email });
 }
 
 async function prefEnabled(userId: string, kind: NotificationKind) {
@@ -163,27 +197,35 @@ async function prefEnabled(userId: string, kind: NotificationKind) {
 // --- Scheduled batches ------------------------------------------------------
 
 export async function runRoadmapReminders() {
-  const rows = await query<{ userId: string; pending: number; nextSkill: string; nextAction: string } & Record<string, unknown>>(
-    `SELECT rm.user_id AS "userId",
+  const rows = await query<{ userId: string; firstName: string; pending: number; nextSkill: string; nextAction: string } & Record<string, unknown>>(
+    `SELECT rm.user_id AS "userId", split_part(u.full_name,' ',1) AS "firstName",
        COUNT(*) FILTER (WHERE ri.status <> 'completed') AS pending,
        (ARRAY_AGG(s.name ORDER BY ri.position) FILTER (WHERE ri.status <> 'completed'))[1] AS "nextSkill",
        (ARRAY_AGG(ri.recommended_action ORDER BY ri.position) FILTER (WHERE ri.status <> 'completed'))[1] AS "nextAction"
      FROM roadmaps rm
      JOIN roadmap_items ri ON ri.roadmap_id = rm.id
      JOIN skills s ON s.id = ri.skill_id
+     JOIN users u ON u.id = rm.user_id
      JOIN preferences p ON p.user_id = rm.user_id AND p.notify_roadmap = true
      JOIN messaging_channels mc ON mc.user_id = rm.user_id AND mc.status = 'linked'
      WHERE rm.created_at = (SELECT MAX(created_at) FROM roadmaps WHERE user_id = rm.user_id)
-     GROUP BY rm.user_id
+     GROUP BY rm.user_id, u.full_name
      HAVING COUNT(*) FILTER (WHERE ri.status <> 'completed') > 0`,
   );
+  const { buildNotificationEmail } = await import("@/lib/email");
   const day = new Date().toISOString().slice(0, 10);
   let sent = 0;
   for (const row of rows) {
     const text =
       `<b>Aperio — keep your roadmap moving</b>\n` +
       `${row.pending} step(s) still open. Next up: <b>${row.nextSkill}</b>.\n${row.nextAction}`;
-    const result = await dispatch({ userId: row.userId, kind: "roadmap", dedupeKey: `roadmap:${row.userId}:${day}`, text });
+    const email = buildNotificationEmail("roadmap", {
+      firstName: row.firstName || undefined,
+      pending: Number(row.pending),
+      nextSkill: row.nextSkill,
+      nextAction: row.nextAction,
+    });
+    const result = await dispatch({ userId: row.userId, kind: "roadmap", dedupeKey: `roadmap:${row.userId}:${day}`, text, email });
     if (result === "sent") sent += 1;
   }
   return { candidates: rows.length, sent };
@@ -191,10 +233,10 @@ export async function runRoadmapReminders() {
 
 export async function runWeeklyDigest() {
   const rows = await query<{
-    userId: string; roleTitle: string | null; overallScore: number | null;
+    userId: string; firstName: string; roleTitle: string | null; overallScore: number | null;
     completed: number; pending: number;
   } & Record<string, unknown>>(
-    `SELECT u.id AS "userId",
+    `SELECT u.id AS "userId", split_part(u.full_name,' ',1) AS "firstName",
        latest_role.title AS "roleTitle",
        latest.overall_score AS "overallScore",
        COALESCE(rp.completed, 0) AS completed,
@@ -215,6 +257,7 @@ export async function runWeeklyDigest() {
          AND rm.created_at = (SELECT MAX(created_at) FROM roadmaps WHERE user_id = u.id)
      ) rp ON true`,
   );
+  const { buildNotificationEmail } = await import("@/lib/email");
   const week = isoWeek();
   let sent = 0;
   for (const row of rows) {
@@ -225,15 +268,22 @@ export async function runWeeklyDigest() {
       `<b>Aperio — your week</b>\n${head}\n` +
       `Roadmap: ${row.completed} done, ${row.pending} open.\n` +
       `Pick one step to finish this week.`;
-    const result = await dispatch({ userId: row.userId, kind: "weekly_digest", dedupeKey: `weekly_digest:${row.userId}:${week}`, text });
+    const email = buildNotificationEmail("weekly_digest", {
+      firstName: row.firstName || undefined,
+      roleTitle: row.roleTitle,
+      overall: row.overallScore,
+      completed: Number(row.completed),
+      pending: Number(row.pending),
+    });
+    const result = await dispatch({ userId: row.userId, kind: "weekly_digest", dedupeKey: `weekly_digest:${row.userId}:${week}`, text, email });
     if (result === "sent") sent += 1;
   }
   return { candidates: rows.length, sent };
 }
 
 export async function runInactivityNudges(idleDays = 7) {
-  const rows = await query<{ userId: string } & Record<string, unknown>>(
-    `SELECT u.id AS "userId"
+  const rows = await query<{ userId: string; firstName: string } & Record<string, unknown>>(
+    `SELECT u.id AS "userId", split_part(u.full_name,' ',1) AS "firstName"
      FROM users u
      JOIN preferences p ON p.user_id = u.id AND p.notify_inactivity = true
      JOIN messaging_channels mc ON mc.user_id = u.id AND mc.status = 'linked'
@@ -247,11 +297,13 @@ export async function runInactivityNudges(idleDays = 7) {
   );
   const window = `${new Date().getUTCFullYear()}-${Math.floor(Date.now() / (idleDays * 86_400_000))}`;
   let sent = 0;
+  const { buildNotificationEmail } = await import("@/lib/email");
   for (const row of rows) {
     const text =
       `<b>Aperio — pick your progress back up</b>\n` +
       `It's been a quiet week. Ten focused minutes on your top roadmap step keeps the momentum going.`;
-    const result = await dispatch({ userId: row.userId, kind: "inactivity", dedupeKey: `inactivity:${row.userId}:${window}`, text });
+    const email = buildNotificationEmail("inactivity", { firstName: row.firstName || undefined });
+    const result = await dispatch({ userId: row.userId, kind: "inactivity", dedupeKey: `inactivity:${row.userId}:${window}`, text, email });
     if (result === "sent") sent += 1;
   }
   return { candidates: rows.length, sent };

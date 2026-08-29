@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, CheckCheck, Download, LoaderCircle, Maximize2, MessageCircle, Paperclip, Play, Plus, Search, Send, X } from "lucide-react";
+import { AlertCircle, BarChart3, Check, CheckCheck, Download, LoaderCircle, Maximize2, MessageCircle, Paperclip, Play, Plus, Search, Send, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type Thread = {
   id: string;
-  channel: "telegram_userbot" | "whatsapp";
+  channel: "telegram_userbot" | "telegram_bot" | "whatsapp";
   peerId: string;
   peerName: string | null;
   peerUsername: string | null;
@@ -33,7 +33,7 @@ type Message = {
   pending?: boolean;
 };
 
-const channelDot = { telegram_userbot: "#229ED9", whatsapp: "#25D366" };
+const channelDot: Record<string, string> = { telegram_userbot: "#229ED9", telegram_bot: "#229ED9", whatsapp: "#25D366" };
 
 function timeLabel(iso: string | null) {
   if (!iso) return "";
@@ -118,7 +118,7 @@ function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void 
 
 export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: { initialThreads: Thread[]; telegramReady: boolean; whatsappReady: boolean }) {
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
-  const [channel, setChannel] = useState<"all" | "telegram_userbot" | "whatsapp">("all");
+  const [channel, setChannel] = useState<"all" | "telegram" | "whatsapp">("all");
   const [q, setQ] = useState("");
   const [activeId, setActiveId] = useState<string | null>(initialThreads[0]?.id ?? null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -131,6 +131,10 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
   const [newChannel, setNewChannel] = useState<"whatsapp" | "telegram_userbot">("whatsapp");
   const [newPeer, setNewPeer] = useState("");
   const [starting, setStarting] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
+  const [pollQ, setPollQ] = useState("");
+  const [pollOpts, setPollOpts] = useState<string[]>(["", ""]);
+  const [pollSending, setPollSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const lastIdRef = useRef<string | null>(null);
@@ -177,6 +181,29 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
     if (!contacts.length) {
       const res = await fetch("/api/v1/admin/chat/contacts").then((r) => r.json()).catch(() => null);
       if (res?.data?.contacts) setContacts(res.data.contacts);
+    }
+  }
+
+  async function sendPoll() {
+    if (!activeId) return;
+    setPollSending(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/v1/admin/chat/${activeId}/poll`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: pollQ.trim(), options: pollOpts.map((o) => o.trim()).filter(Boolean) }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Poll failed.");
+      setPollOpen(false);
+      setPollQ("");
+      setPollOpts(["", ""]);
+      await loadMessages(activeId, false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Poll failed.");
+    } finally {
+      setPollSending(false);
     }
   }
 
@@ -278,9 +305,9 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
       <div className="mb-3 flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Chat workspace</h1>
         <div className="flex gap-1 rounded-[10px] border bg-[var(--surface)] p-1 text-xs font-medium">
-          {(["all", "telegram_userbot", "whatsapp"] as const).map((c) => (
+          {(["all", "telegram", "whatsapp"] as const).map((c) => (
             <button key={c} onClick={() => setChannel(c)} className={cn("rounded-[7px] px-2.5 py-1", channel === c ? "bg-[var(--primary-soft)] text-[var(--primary-strong)]" : "text-[var(--muted)]")}>
-              {c === "all" ? "All" : c === "telegram_userbot" ? "Telegram" : "WhatsApp"}
+              {c === "all" ? "All" : c === "telegram" ? "Telegram" : "WhatsApp"}
             </button>
           ))}
         </div>
@@ -412,9 +439,47 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
 
               <div className="border-t p-3">
                 {error && <p className="mb-2 text-xs text-[var(--critical)]">{error}</p>}
+
+                {pollOpen && (
+                  <div className="mb-2 rounded-[12px] border bg-[var(--surface-elevated)] p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold">New poll</span>
+                      <button onClick={() => setPollOpen(false)} className="text-[var(--muted)]"><X size={14} /></button>
+                    </div>
+                    <Input value={pollQ} onChange={(e) => setPollQ(e.target.value)} placeholder="Question" className="mt-2 h-9" />
+                    <div className="mt-1.5 space-y-1.5">
+                      {pollOpts.map((o, i) => (
+                        <Input
+                          key={i}
+                          value={o}
+                          onChange={(e) => setPollOpts((arr) => arr.map((x, j) => (j === i ? e.target.value : x)))}
+                          placeholder={`Option ${i + 1}`}
+                          className="h-8"
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      {pollOpts.length < 10 && (
+                        <button onClick={() => setPollOpts((a) => [...a, ""])} className="text-xs font-semibold text-[var(--primary)]">+ option</button>
+                      )}
+                      <button
+                        onClick={sendPoll}
+                        disabled={pollSending || !pollQ.trim() || pollOpts.filter((o) => o.trim()).length < 2}
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-[8px] bg-[var(--primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        {pollSending ? <LoaderCircle size={13} className="animate-spin" /> : <BarChart3 size={13} />}Send poll
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-[var(--muted)]">Telegram → native poll · WhatsApp → quick-reply buttons (≤3) or a list.</p>
+                  </div>
+                )}
+
                 <div className="flex items-end gap-2">
                   <button onClick={() => fileRef.current?.click()} className="grid size-10 shrink-0 place-items-center rounded-[10px] border text-[var(--muted)] hover:text-[var(--foreground)]" title="Attach">
                     <Paperclip size={16} />
+                  </button>
+                  <button onClick={() => setPollOpen((v) => !v)} className={cn("grid size-10 shrink-0 place-items-center rounded-[10px] border", pollOpen ? "border-[var(--primary)] text-[var(--primary)]" : "text-[var(--muted)] hover:text-[var(--foreground)]")} title="Poll">
+                    <BarChart3 size={16} />
                   </button>
                   <input
                     ref={fileRef}
