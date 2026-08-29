@@ -1,17 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, Check, Copy, LoaderCircle, MessageCircle, Send, Unlink } from "lucide-react";
+import { Bell, Check, Copy, LoaderCircle, Mail, MessageCircle, Send, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { IntegrationsState } from "@/lib/integrations";
 
 type Prefs = IntegrationsState["preferences"];
 type Platform = "telegram" | "whatsapp";
+type SendPref = "notifyRoadmap" | "notifyWeeklyDigest" | "notifyAnalysis" | "notifyInactivity";
 
-const prefLabels: Record<keyof Prefs, { title: string; hint: string }> = {
+const prefLabels: Record<SendPref, { title: string; hint: string }> = {
   notifyRoadmap: { title: "Roadmap reminders", hint: "A nudge with your next open roadmap step." },
   notifyWeeklyDigest: { title: "Weekly digest", hint: "Once a week: match score and what to finish next." },
-  notifyAnalysis: { title: "Analysis updates", hint: "When a new analysis is ready or your score changes." },
+  notifyAnalysis: { title: "Analysis updates", hint: "When a new analysis is ready or your résumé is scored." },
   notifyInactivity: { title: "Inactivity nudge", hint: "A reminder if a week passes with no progress." },
 };
 
@@ -72,7 +73,8 @@ export function NotificationSettings({ initial }: { initial: IntegrationsState }
     }).catch(() => refresh());
   }
 
-  const anyLinked = data.channels.some((c) => c.status === "linked" && c.hasAddress);
+  const emailOn = data.providers.email.configured && data.preferences.notifyEmail;
+  const anyLinked = emailOn || data.channels.some((c) => c.status === "linked" && c.hasAddress);
 
   function renderChannel(platform: Platform) {
     const { label, icon: Icon, missing } = meta[platform];
@@ -129,6 +131,26 @@ export function NotificationSettings({ initial }: { initial: IntegrationsState }
 
   return (
     <div className="space-y-4">
+      <section className="rounded-[16px] border bg-[var(--surface)] p-5">
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 place-items-center rounded-[11px] bg-[var(--primary-soft)] text-[var(--primary)]"><Mail size={18} /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold">Email</h2>
+            {data.providers.email.configured ? (
+              <>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Sent to <b className="text-[var(--foreground)]">{data.email}</b> — welcome message, analysis / résumé-scored updates, and the weekly digest.</p>
+                <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 text-xs font-medium">
+                  <input type="checkbox" className="size-4 accent-[var(--primary)]" checked={data.preferences.notifyEmail} onChange={(e) => togglePref("notifyEmail", e.target.checked)} />
+                  Email me these updates
+                </label>
+              </>
+            ) : (
+              <p className="mt-1 rounded-[10px] bg-[var(--attention-soft)] px-3 py-2 text-xs text-[var(--muted-strong)]">Email is not configured yet. An admin can add SMTP or Resend credentials in Admin → Integrations.</p>
+            )}
+          </div>
+        </div>
+      </section>
+
       {renderChannel("telegram")}
       {renderChannel("whatsapp")}
 
@@ -138,7 +160,7 @@ export function NotificationSettings({ initial }: { initial: IntegrationsState }
           <h2 className="text-sm font-semibold">What to send</h2>
         </div>
         <div className="mt-3 divide-y">
-          {(Object.keys(prefLabels) as Array<keyof Prefs>).map((key) => (
+          {(Object.keys(prefLabels) as SendPref[]).map((key) => (
             <label key={key} className="flex cursor-pointer items-center justify-between gap-4 py-3">
               <span>
                 <span className="block text-sm font-medium">{prefLabels[key].title}</span>

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { createSession } from "@/lib/auth";
 import { syncAdminRole } from "@/lib/admin";
 import { logActivity, touchLastSeen } from "@/lib/activity";
+import { sendWelcomeEmail } from "@/lib/email";
 import { db, one, query } from "@/lib/db";
 import {
   OAUTH_STATE_COOKIE,
@@ -104,6 +105,7 @@ export async function GET(request: Request) {
     metadata: { provider: "google" },
     request,
   });
+  if (isNewUser) void sendWelcomeEmail({ email, fullName });
 
   return back(isNewUser ? "/onboarding" : "/overview");
 }

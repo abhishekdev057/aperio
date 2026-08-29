@@ -15,7 +15,7 @@ const PREF_COLUMN: Partial<Record<NotificationKind, string>> = {
 
 interface LinkedChannel {
   id: string;
-  platform: "telegram" | "whatsapp";
+  platform: "telegram" | "whatsapp" | "email";
   address: string;
 }
 
@@ -28,11 +28,23 @@ export function newLinkCode() {
 }
 
 async function linkedChannels(userId: string): Promise<LinkedChannel[]> {
-  return query<LinkedChannel & Record<string, unknown>>(
+  const channels = await query<LinkedChannel & Record<string, unknown>>(
     `SELECT id, platform, address FROM messaging_channels
      WHERE user_id=$1 AND status='linked' AND address IS NOT NULL`,
     [userId],
   );
+  // Email is not "linked" with a code — it goes to the account's own address
+  // when email notifications are on for the user and an email provider is set up.
+  const emailRow = await query<{ email: string; on: boolean } & Record<string, unknown>>(
+    `SELECT u.email, COALESCE(p.notify_email, true) AS "on"
+     FROM users u LEFT JOIN preferences p ON p.user_id = u.id WHERE u.id=$1`,
+    [userId],
+  );
+  if (emailRow[0]?.on && emailRow[0].email) {
+    const { isEmailConfigured } = await import("@/lib/email");
+    if (await isEmailConfigured()) channels.push({ id: "email", platform: "email", address: emailRow[0].email });
+  }
+  return channels;
 }
 
 async function deliver(channel: LinkedChannel, text: string) {
@@ -45,6 +57,12 @@ async function deliver(channel: LinkedChannel, text: string) {
     const { getWhatsAppConfig, sendWhatsAppText } = await import("@/lib/whatsapp");
     if (!(await getWhatsAppConfig()).configured) throw new Error("WHATSAPP_NOT_CONFIGURED");
     await sendWhatsAppText(channel.address, text);
+    return;
+  }
+  if (channel.platform === "email") {
+    const { sendEmail, notificationEmail } = await import("@/lib/email");
+    const { subject, html } = notificationEmail(text);
+    await sendEmail(channel.address, subject, html, text.replace(/<\/?b>/g, ""));
     return;
   }
   throw new Error("UNKNOWN_CHANNEL");

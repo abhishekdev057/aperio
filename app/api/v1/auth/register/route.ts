@@ -5,6 +5,7 @@ import { db, one } from "@/lib/db";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { syncAdminRole } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
+import { sendWelcomeEmail } from "@/lib/email";
 import { registerSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
     await createSession(id);
     await syncAdminRole(id, input.email);
     await logActivity({ action: "auth.register", userId: id, actorEmail: input.email, request });
+    void sendWelcomeEmail({ email: input.email, fullName: input.fullName });
     return ok({ id, email: input.email, fullName: input.fullName }, { status: 201 });
   } catch (error) { return handleApiError(error); }
 }

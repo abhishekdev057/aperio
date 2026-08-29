@@ -47,6 +47,7 @@ export const notificationPreferencesSchema = z.object({
   notifyWeeklyDigest: z.boolean().optional(),
   notifyAnalysis: z.boolean().optional(),
   notifyInactivity: z.boolean().optional(),
+  notifyEmail: z.boolean().optional(),
 });
 
 export const learningPathSchema = z.object({

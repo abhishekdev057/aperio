@@ -1,4 +1,5 @@
 import { query } from "@/lib/db";
+import { getEmailConfig } from "@/lib/email";
 import { getTelegramConfig } from "@/lib/telegram";
 import { getWhatsAppConfig } from "@/lib/whatsapp";
 
@@ -10,15 +11,18 @@ export interface IntegrationsState {
     hasAddress: boolean;
     linkCode: string | null;
   }>;
+  email: string;
   preferences: {
     notifyRoadmap: boolean;
     notifyWeeklyDigest: boolean;
     notifyAnalysis: boolean;
     notifyInactivity: boolean;
+    notifyEmail: boolean;
   };
   providers: {
     telegram: { configured: boolean; botUsername: string };
     whatsapp: { configured: boolean; businessNumber: string };
+    email: { configured: boolean; provider: string | null };
   };
 }
 
@@ -29,23 +33,30 @@ export async function getIntegrationsState(userId: string): Promise<Integrations
     [userId],
   );
   const prefs = await query<Record<string, unknown>>(
-    `SELECT notify_roadmap AS "notifyRoadmap", notify_weekly_digest AS "notifyWeeklyDigest",
-      notify_analysis AS "notifyAnalysis", notify_inactivity AS "notifyInactivity"
-     FROM preferences WHERE user_id=$1`,
+    `SELECT u.email, COALESCE(p.notify_roadmap, true) AS "notifyRoadmap",
+      COALESCE(p.notify_weekly_digest, true) AS "notifyWeeklyDigest",
+      COALESCE(p.notify_analysis, true) AS "notifyAnalysis",
+      COALESCE(p.notify_inactivity, true) AS "notifyInactivity",
+      COALESCE(p.notify_email, true) AS "notifyEmail"
+     FROM users u LEFT JOIN preferences p ON p.user_id = u.id WHERE u.id=$1`,
     [userId],
   );
-  const [telegram, whatsapp] = await Promise.all([getTelegramConfig(), getWhatsAppConfig()]);
+  const [telegram, whatsapp, email] = await Promise.all([getTelegramConfig(), getWhatsAppConfig(), getEmailConfig()]);
+  const row = prefs[0] ?? {};
   return {
     channels,
-    preferences: (prefs[0] as IntegrationsState["preferences"]) ?? {
-      notifyRoadmap: true,
-      notifyWeeklyDigest: true,
-      notifyAnalysis: true,
-      notifyInactivity: true,
+    email: String(row.email ?? ""),
+    preferences: {
+      notifyRoadmap: Boolean(row.notifyRoadmap ?? true),
+      notifyWeeklyDigest: Boolean(row.notifyWeeklyDigest ?? true),
+      notifyAnalysis: Boolean(row.notifyAnalysis ?? true),
+      notifyInactivity: Boolean(row.notifyInactivity ?? true),
+      notifyEmail: Boolean(row.notifyEmail ?? true),
     },
     providers: {
       telegram: { configured: telegram.configured, botUsername: telegram.botUsername },
       whatsapp: { configured: whatsapp.configured, businessNumber: whatsapp.businessNumber },
+      email: { configured: email.provider !== null, provider: email.provider },
     },
   };
 }

@@ -15,15 +15,17 @@ export async function PATCH(request: Request) {
         notify_weekly_digest = COALESCE($2, notify_weekly_digest),
         notify_analysis = COALESCE($3, notify_analysis),
         notify_inactivity = COALESCE($4, notify_inactivity),
+        notify_email = COALESCE($5, notify_email),
         updated_at = now()
-       WHERE user_id=$5
+       WHERE user_id=$6
        RETURNING notify_roadmap AS "notifyRoadmap", notify_weekly_digest AS "notifyWeeklyDigest",
-        notify_analysis AS "notifyAnalysis", notify_inactivity AS "notifyInactivity"`,
+        notify_analysis AS "notifyAnalysis", notify_inactivity AS "notifyInactivity", notify_email AS "notifyEmail"`,
       [
         input.notifyRoadmap ?? null,
         input.notifyWeeklyDigest ?? null,
         input.notifyAnalysis ?? null,
         input.notifyInactivity ?? null,
+        input.notifyEmail ?? null,
         user.id,
       ],
     );

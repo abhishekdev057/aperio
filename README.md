@@ -80,7 +80,8 @@ Email-gated by `ADMIN_EMAILS`. Overview KPIs + charts, searchable users with ful
 
 Users can link a channel in **Settings → Connected messaging** and receive automated messages: roadmap reminders, a weekly digest, analysis-ready updates, and an inactivity nudge — each toggle is per-user and off unless a channel is linked.
 
-- **Telegram** is implemented. Create a bot with `@BotFather`, set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, and `TELEGRAM_WEBHOOK_SECRET`, then register the webhook to `POST /api/v1/integrations/telegram/webhook`. Linking uses a one-time code the user sends to the bot; only a Telegram `chat_id` is stored.
+- **Email** — a welcome message on sign-up plus the same event notifications (analysis ready / résumé scored, weekly digest, roadmap and inactivity nudges). No linking: it goes to the account's own address whenever an email provider is configured and `preferences.notify_email` is on. Providers configured in Admin → Integrations: **SMTP** (nodemailer — Gmail/host/anything) or **Resend** (HTTP API). "Test connection" sends a real email to the admin.
+- **Telegram** is implemented. Configure the bot token, @username and webhook secret in Admin → Integrations (or the `TELEGRAM_*` env vars as a fallback), then register the webhook to `POST /api/v1/integrations/telegram/webhook`. Linking uses a one-time code the user sends to the bot; only a Telegram `chat_id` is stored.
 - **WhatsApp** is stubbed — the notification engine already routes by channel `platform`; enabling it means adding a provider (Meta Cloud API or Twilio), implementing the `whatsapp` branch in `lib/notifications.ts`, and a real opt-in flow.
 - Scheduled sends run from `GET /api/v1/cron/notifications?job=all` (Vercel Cron in `vercel.json`, daily) guarded by `CRON_SECRET`. Every send is de-duplicated via `notification_log` (per day / ISO week / window), so a daily cron still yields one weekly digest.
 

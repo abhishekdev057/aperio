@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/admin";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { getIntegrationRuntime, schemaFor } from "@/lib/settings";
+import { sendTestEmail } from "@/lib/email";
 import { telegramGetMe } from "@/lib/telegram";
 import { testUserbot } from "@/lib/telegram-userbot";
 
@@ -9,9 +10,18 @@ export const maxDuration = 60;
 
 export async function POST(_: Request, context: { params: Promise<{ key: string }> }) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
     const key = (await context.params).key;
     if (!schemaFor(key)) return fail("NOT_FOUND", "Unknown integration.", 404);
+
+    if (key === "email.smtp" || key === "email.resend") {
+      try {
+        await sendTestEmail(admin.email);
+        return ok({ ok: true, detail: `Test email sent to ${admin.email}. Check your inbox.` });
+      } catch (error) {
+        return ok({ ok: false, detail: error instanceof Error ? error.message : "Send failed." });
+      }
+    }
 
     if (key === "telegram.bot") {
       try {

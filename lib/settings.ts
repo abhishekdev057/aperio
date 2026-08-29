@@ -3,7 +3,13 @@ import "server-only";
 import { one, query } from "@/lib/db";
 import { decryptSecret, encryptSecret, isEncryptionConfigured, maskSecret } from "@/lib/crypto";
 
-export type IntegrationKey = "telegram.bot" | "telegram.userbot" | "whatsapp.cloud" | "jobs.arbeitnow";
+export type IntegrationKey =
+  | "email.smtp"
+  | "email.resend"
+  | "telegram.bot"
+  | "telegram.userbot"
+  | "whatsapp.cloud"
+  | "jobs.arbeitnow";
 
 interface FieldDef {
   name: string;
@@ -26,6 +32,32 @@ export interface IntegrationSchema {
 }
 
 export const INTEGRATION_SCHEMAS: IntegrationSchema[] = [
+  {
+    key: "email.smtp",
+    title: "Email — SMTP",
+    description: "Send the welcome email and notification emails through any SMTP server (Gmail, your host, etc.). Test connection sends a real email to your admin address.",
+    docsUrl: "https://nodemailer.com/smtp/",
+    fields: [
+      { name: "host", label: "SMTP host", secret: false, placeholder: "smtp.gmail.com" },
+      { name: "port", label: "Port", secret: false, placeholder: "587", help: "587 (STARTTLS) or 465 (SSL)" },
+      { name: "secure", label: "SSL? (true/false)", secret: false, optional: true, placeholder: "false", help: "true for port 465" },
+      { name: "user", label: "Username", secret: false, placeholder: "you@gmail.com" },
+      { name: "pass", label: "Password / app password", secret: true },
+      { name: "fromName", label: "From name", secret: false, optional: true, placeholder: "Aperio" },
+      { name: "fromEmail", label: "From email", secret: false, placeholder: "no-reply@yourdomain.com" },
+    ],
+  },
+  {
+    key: "email.resend",
+    title: "Email — Resend",
+    description: "HTTP email API, no SMTP. Get a key at resend.com. Used only if SMTP is not enabled.",
+    docsUrl: "https://resend.com/docs/send-with-nodejs",
+    fields: [
+      { name: "apiKey", label: "Resend API key", secret: true, placeholder: "re_..." },
+      { name: "fromName", label: "From name", secret: false, optional: true, placeholder: "Aperio" },
+      { name: "fromEmail", label: "From email", secret: false, placeholder: "onboarding@resend.dev", help: "A verified domain, or onboarding@resend.dev for testing." },
+    ],
+  },
   {
     key: "telegram.bot",
     title: "Telegram bot",
