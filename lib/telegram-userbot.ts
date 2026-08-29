@@ -1,6 +1,5 @@
 import "server-only";
 
-import { Api, TelegramClient, password as tgPassword, sessions as tgSessions } from "teleproto";
 import { getIntegrationRuntime, setRawSecrets, type IntegrationKey } from "@/lib/settings";
 import { query } from "@/lib/db";
 import {
@@ -13,14 +12,22 @@ import {
   type MessageKind,
 } from "@/lib/chat";
 
-const { StringSession } = tgSessions;
-const { computeCheck } = tgPassword;
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const KEY: IntegrationKey = "telegram.userbot";
 const CONNECT_RETRIES = 3;
 
-function makeClient(apiId: number, apiHash: string, session: string) {
-  return new TelegramClient(new StringSession(session), apiId, apiHash, {
+// teleproto is a heavy MTProto library — load it only when a userbot action
+// actually runs, never at module import time (keeps it out of every bundle).
+let _tp: any = null;
+async function tp() {
+  if (!_tp) _tp = await import("teleproto");
+  return _tp;
+}
+
+async function makeClient(apiId: number, apiHash: string, session: string) {
+  const { TelegramClient, sessions } = await tp();
+  return new TelegramClient(new sessions.StringSession(session), apiId, apiHash, {
     connectionRetries: CONNECT_RETRIES,
     deviceModel: "Aperio",
     systemVersion: "1.0",
@@ -41,14 +48,13 @@ export async function sendUserbotLoginCode() {
   const { apiId, apiHash, phone } = await creds();
   if (!apiId || !apiHash || !phone) throw new Error("USERBOT_CREDS_MISSING");
 
-  const client = makeClient(apiId, apiHash, "");
+  const client = await makeClient(apiId, apiHash, "");
   try {
     await client.connect();
     const result = await client.sendCode({ apiId, apiHash }, phone);
-    const pendingSession = (client.session as { save: () => string }).save();
     await setRawSecrets(KEY, {
       _pendingCodeHash: result.phoneCodeHash,
-      _pendingSession: pendingSession,
+      _pendingSession: client.session.save(),
     });
     return { sent: true, viaApp: Boolean(result.isCodeViaApp) };
   } finally {
@@ -64,7 +70,8 @@ export async function signInUserbot(code: string, password?: string) {
   const pendingSession = rt.secret("_pendingSession");
   if (!phoneCodeHash || !pendingSession) throw new Error("NO_PENDING_LOGIN");
 
-  const client = makeClient(apiId, apiHash, pendingSession);
+  const { Api, password: tgPassword } = await tp();
+  const client = await makeClient(apiId, apiHash, pendingSession);
   try {
     await client.connect();
     try {
@@ -74,7 +81,7 @@ export async function signInUserbot(code: string, password?: string) {
       if (message.includes("SESSION_PASSWORD_NEEDED")) {
         if (!password) throw new Error("PASSWORD_REQUIRED");
         const pwd = await client.invoke(new Api.account.GetPassword());
-        const check = await computeCheck(pwd, password);
+        const check = await tgPassword.computeCheck(pwd, password);
         await client.invoke(new Api.auth.CheckPassword({ password: check }));
       } else if (message.includes("PHONE_CODE_INVALID") || message.includes("PHONE_CODE_EXPIRED")) {
         throw new Error("PHONE_CODE_INVALID");
@@ -84,19 +91,14 @@ export async function signInUserbot(code: string, password?: string) {
     }
 
     const me = await client.getMe();
-    const stringSession = (client.session as { save: () => string }).save();
-    await setRawSecrets(KEY, {
-      stringSession,
-      _pendingCodeHash: null,
-      _pendingSession: null,
-    });
+    await setRawSecrets(KEY, { stringSession: client.session.save(), _pendingCodeHash: null, _pendingSession: null });
     return {
       linked: true,
       me: {
-        id: String((me as { id?: unknown })?.id ?? ""),
-        username: (me as { username?: string })?.username ?? null,
-        firstName: (me as { firstName?: string })?.firstName ?? null,
-        phone: (me as { phone?: string })?.phone ?? null,
+        id: String(me?.id ?? ""),
+        username: me?.username ?? null,
+        firstName: me?.firstName ?? null,
+        phone: me?.phone ?? null,
       },
     };
   } finally {
@@ -111,13 +113,11 @@ export async function testUserbot() {
   if (!apiId || !apiHash) return { ok: false, detail: "Add the API ID and API hash first." };
   if (!session) return { ok: false, detail: "Not logged in yet — send an OTP and sign in below." };
 
-  const client = makeClient(apiId, apiHash, session);
+  const client = await makeClient(apiId, apiHash, session);
   try {
     await client.connect();
     const me = await client.getMe();
-    const username = (me as { username?: string })?.username;
-    const firstName = (me as { firstName?: string })?.firstName;
-    return { ok: true, detail: `Logged in as ${username ? `@${username}` : firstName ?? "user"}` };
+    return { ok: true, detail: `Logged in as ${me?.username ? `@${me.username}` : me?.firstName ?? "user"}` };
   } catch (error) {
     return { ok: false, detail: error instanceof Error ? error.message : "Connection failed." };
   } finally {
@@ -141,12 +141,11 @@ async function connectedClient() {
   const { apiId, apiHash, rt } = await creds();
   const session = rt.secret("stringSession");
   if (!apiId || !apiHash || !session) return null;
-  const client = makeClient(apiId, apiHash, session);
+  const client = await makeClient(apiId, apiHash, session);
   await client.connect();
   return client;
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 function mediaKind(msg: any): { kind: MessageKind; mime: string; name: string | null } | null {
   if (msg.photo) return { kind: "image", mime: "image/jpeg", name: null };
   if (msg.sticker) return { kind: "sticker", mime: "image/webp", name: null };
@@ -188,7 +187,7 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
     const dialogs = await client.getDialogs({ limit: maxDialogs });
     for (const dialog of dialogs) {
       const entity: any = dialog.entity;
-      if (!entity || peerTypeOf(entity) === "channel") continue; // skip broadcast channels
+      if (!entity || peerTypeOf(entity) === "channel") continue;
       const peerId = String(dialog.id);
       const name = (dialog as any).name || [entity.firstName, entity.lastName].filter(Boolean).join(" ") || entity.title || peerId;
       const threadId = await upsertThread({
@@ -247,31 +246,36 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
   }
 }
 
-function inputPeerFor(t: { peerId: string; peerUsername: string | null; peerAccessHash: string | null; peerType: string | null }) {
-  const id = BigInt(t.peerId.replace("-100", "").replace("-", ""));
-  const hash = t.peerAccessHash ? BigInt(t.peerAccessHash) : 0n;
-  if (t.peerType === "channel") return new Api.InputPeerChannel({ channelId: id as any, accessHash: hash as any });
-  if (t.peerType === "chat") return new Api.InputPeerChat({ chatId: id as any });
-  return new Api.InputPeerUser({ userId: id as any, accessHash: hash as any });
-}
-
 export async function sendUserbotMessage(threadId: string, input: { text?: string; file?: { data: Buffer; mime: string; name: string } }) {
   const thread = await getThreadForSend(threadId);
   if (!thread || thread.channel !== "telegram_userbot") throw new Error("THREAD_NOT_FOUND");
   const client = await connectedClient();
   if (!client) throw new Error("USERBOT_NOT_LOGGED_IN");
+  const { Api } = await tp();
   try {
-    const peer = thread.peerUsername ? `@${thread.peerUsername.replace(/^@/, "")}` : inputPeerFor(thread);
+    let peer: any;
+    if (thread.peerUsername) {
+      peer = `@${thread.peerUsername.replace(/^@/, "")}`;
+    } else {
+      const id = BigInt(thread.peerId.replace("-100", "").replace("-", ""));
+      const hash = thread.peerAccessHash ? BigInt(thread.peerAccessHash) : 0n;
+      peer =
+        thread.peerType === "channel"
+          ? new Api.InputPeerChannel({ channelId: id, accessHash: hash })
+          : thread.peerType === "chat"
+            ? new Api.InputPeerChat({ chatId: id })
+            : new Api.InputPeerUser({ userId: id, accessHash: hash });
+    }
     let sent: any;
     if (input.file) {
-      sent = await client.sendFile(peer as any, {
+      sent = await client.sendFile(peer, {
         file: input.file.data,
         caption: input.text || undefined,
         forceDocument: !/^(image|video|audio)\//.test(input.file.mime),
         attributes: [new Api.DocumentAttributeFilename({ fileName: input.file.name || "file" })],
       });
     } else {
-      sent = await client.sendMessage(peer as any, { message: input.text || "" });
+      sent = await client.sendMessage(peer, { message: input.text || "" });
     }
     const msg = Array.isArray(sent) ? sent[0] : sent;
     return { externalId: msg?.id != null ? String(msg.id) : null };
@@ -279,4 +283,3 @@ export async function sendUserbotMessage(threadId: string, input: { text?: strin
     await client.disconnect().catch(() => {});
   }
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
