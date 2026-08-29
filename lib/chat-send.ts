@@ -2,7 +2,7 @@ import "server-only";
 
 import { createPoll, getThreadForSend, recordMessage, storeMedia, updateMessageStatus, type MessageKind } from "@/lib/chat";
 import { sendTelegramMessage, sendTelegramPoll } from "@/lib/telegram";
-import { sendUserbotMessage } from "@/lib/telegram-userbot";
+import { sendUserbotMessage, sendUserbotPoll } from "@/lib/telegram-userbot";
 import { getWhatsAppConfig, sendWhatsAppMedia, sendWhatsAppPoll, sendWhatsAppText, uploadWhatsAppMedia } from "@/lib/whatsapp";
 
 function kindForMime(mime: string): MessageKind {
@@ -80,7 +80,7 @@ export async function sendChatPoll(threadId: string, question: string, options: 
   let externalId: string | null = null;
   try {
     if (thread.channel === "telegram_userbot") {
-      externalId = await sendUserbotMessage(threadId, { text: `📊 ${question.trim()}\n\n${clean.map((o, i) => `${i + 1}. ${o}`).join("\n")}\n\nReply with the number.` }).then((r) => r.externalId);
+      externalId = (await sendUserbotPoll(threadId, question.trim(), clean)).externalId;
     } else if (thread.channel === "telegram_bot") {
       externalId = await sendTelegramPoll(thread.peerId, question.trim(), clean);
     } else if (thread.channel === "whatsapp") {

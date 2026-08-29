@@ -287,6 +287,24 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
   }
 }
 
+function resolvePeer(Api: any, thread: { peerUsername: string | null; peerId: string; peerAccessHash: string | null; peerType: string | null }) {
+  if (thread.peerUsername) return `@${thread.peerUsername.replace(/^@/, "")}`;
+  const id = BigInt(thread.peerId.replace("-100", "").replace("-", ""));
+  const hash = thread.peerAccessHash ? BigInt(thread.peerAccessHash) : 0n;
+  if (thread.peerType === "channel") return new Api.InputPeerChannel({ channelId: id, accessHash: hash });
+  if (thread.peerType === "chat") return new Api.InputPeerChat({ chatId: id });
+  return new Api.InputPeerUser({ userId: id, accessHash: hash });
+}
+
+function messageIdFromUpdates(updates: any): string | null {
+  const list = updates?.updates ?? (Array.isArray(updates) ? updates : []);
+  for (const u of list) {
+    if (u?.className === "UpdateMessageID" && u.id != null) return String(u.id);
+    if (u?.message?.id != null) return String(u.message.id);
+  }
+  return updates?.id != null ? String(updates.id) : null;
+}
+
 export async function sendUserbotMessage(threadId: string, input: { text?: string; file?: { data: Buffer; mime: string; name: string } }) {
   const thread = await getThreadForSend(threadId);
   if (!thread || thread.channel !== "telegram_userbot") throw new Error("THREAD_NOT_FOUND");
@@ -294,19 +312,7 @@ export async function sendUserbotMessage(threadId: string, input: { text?: strin
   if (!client) throw new Error("USERBOT_NOT_LOGGED_IN");
   const { Api } = await tp();
   try {
-    let peer: any;
-    if (thread.peerUsername) {
-      peer = `@${thread.peerUsername.replace(/^@/, "")}`;
-    } else {
-      const id = BigInt(thread.peerId.replace("-100", "").replace("-", ""));
-      const hash = thread.peerAccessHash ? BigInt(thread.peerAccessHash) : 0n;
-      peer =
-        thread.peerType === "channel"
-          ? new Api.InputPeerChannel({ channelId: id, accessHash: hash })
-          : thread.peerType === "chat"
-            ? new Api.InputPeerChat({ chatId: id })
-            : new Api.InputPeerUser({ userId: id, accessHash: hash });
-    }
+    const peer = resolvePeer(Api, thread);
     let sent: any;
     if (input.file) {
       sent = await client.sendFile(peer, {
@@ -320,6 +326,36 @@ export async function sendUserbotMessage(threadId: string, input: { text?: strin
     }
     const msg = Array.isArray(sent) ? sent[0] : sent;
     return { externalId: msg?.id != null ? String(msg.id) : null };
+  } finally {
+    await client.disconnect().catch(() => {});
+  }
+}
+
+/** Send a real native Telegram poll (non-anonymous) through the user bot. */
+export async function sendUserbotPoll(threadId: string, question: string, options: string[]) {
+  const thread = await getThreadForSend(threadId);
+  if (!thread || thread.channel !== "telegram_userbot") throw new Error("THREAD_NOT_FOUND");
+  const client = await connectedClient();
+  if (!client) throw new Error("USERBOT_NOT_LOGGED_IN");
+  const { Api, helpers } = await tp();
+  try {
+    const peer = resolvePeer(Api, thread);
+    const poll = new Api.Poll({
+      id: helpers.generateRandomBigInt(),
+      publicVoters: true,
+      question: new Api.TextWithEntities({ text: question.slice(0, 255), entities: [] }),
+      answers: options.slice(0, 10).map((text, i) => new Api.PollAnswer({
+        text: new Api.TextWithEntities({ text: text.slice(0, 100), entities: [] }),
+        option: Buffer.from([i]),
+      })),
+    });
+    const updates = await client.invoke(new Api.messages.SendMedia({
+      peer,
+      media: new Api.InputMediaPoll({ poll }),
+      message: "",
+      randomId: helpers.generateRandomBigInt(),
+    }));
+    return { externalId: messageIdFromUpdates(updates) };
   } finally {
     await client.disconnect().catch(() => {});
   }
