@@ -4,9 +4,9 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] px-4 text-sm font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2",
+  "inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] px-4 text-sm font-semibold transition-[background-color,border-color,color,transform,box-shadow] duration-200 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2",
   { variants: { variant: {
-    primary: "bg-[var(--primary)] text-white hover:bg-[var(--primary-strong)]",
+    primary: "bg-[var(--primary)] text-white shadow-[0_7px_18px_color-mix(in_srgb,var(--primary)_20%,transparent)] hover:bg-[var(--primary-strong)]",
     secondary: "border bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-muted)]",
     ghost: "text-[var(--muted-strong)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]",
     destructive: "bg-[var(--critical)] text-white hover:opacity-90",

@@ -21,8 +21,10 @@ export async function getAnalysisReport(userId: string, analysisId: string): Pro
   const report = await one<Omit<AnalysisReport, "skills"> & Record<string, unknown>>(
     `SELECT a.id,a.role_id AS "roleId",r.title AS "roleTitle",a.experience_level AS "experienceLevel",
       a.overall_score AS "overallScore",a.summary,a.matched_count AS "matchedCount",
-      a.developing_count AS "developingCount",a.missing_count AS "missingCount",a.created_at AS "createdAt"
-     FROM analyses a JOIN roles r ON r.id=a.role_id WHERE a.id=$1 AND a.user_id=$2`,
+      a.developing_count AS "developingCount",a.missing_count AS "missingCount",
+      rs.filename AS "resumeFilename",rs.validation_confidence AS "resumeValidationConfidence",a.created_at AS "createdAt"
+     FROM analyses a JOIN roles r ON r.id=a.role_id LEFT JOIN resumes rs ON rs.id=a.resume_id
+     WHERE a.id=$1 AND a.user_id=$2`,
     [analysisId, userId],
   );
   if (!report) return null;

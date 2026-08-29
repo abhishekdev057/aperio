@@ -33,7 +33,7 @@ export function AnalysisReport({ report, compact = false }: { report: Report; co
 
   return <>
     <div className="grid gap-5 xl:grid-cols-[1.34fr_.66fr]">
-      <section className="relative overflow-hidden rounded-[22px] border bg-[var(--surface)] p-6 shadow-[var(--shadow)] sm:p-8">
+      <section className="aperio-panel relative overflow-hidden p-6 sm:p-8">
         <div className="absolute right-0 top-0 size-72 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--primary)_17%,transparent),transparent_70%)]" />
         <div className="relative flex flex-col justify-between gap-8 sm:flex-row sm:items-center">
           <div className="max-w-xl"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.14em] text-[var(--muted)]"><Target size={14} />Career match</div><h2 className="mb-0 mt-4 text-2xl font-semibold tracking-[-.035em]">{report.roleTitle}</h2><div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]"><span className="capitalize">{report.experienceLevel} target</span><span>·</span><span>Analyzed {formatRelative(report.createdAt)}</span></div><p className="mt-5 max-w-lg text-sm leading-6 text-[var(--muted-strong)]">{scoreLabel(report.overallScore)}. Based on the profile evidence currently available to Aperio.</p></div>

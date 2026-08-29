@@ -65,6 +65,8 @@ export interface AnalysisReport {
   matchedCount: number;
   developingCount: number;
   missingCount: number;
+  resumeFilename?: string | null;
+  resumeValidationConfidence?: number | null;
   createdAt: string;
   skills: AnalysisSkill[];
 }

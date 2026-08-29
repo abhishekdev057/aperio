@@ -1,20 +1,65 @@
 import Link from "next/link";
-import { ArrowRight, FileSearch, Map, Target } from "lucide-react";
-import { AnalysisReport } from "@/components/analysis-report";
+import { ArrowRight, BriefcaseBusiness, FileSearch, Gauge, Layers3, Sparkles, Target } from "lucide-react";
+import { OverviewDashboard } from "@/components/overview-dashboard";
 import { Button } from "@/components/ui/button";
 import { requirePageUser } from "@/lib/auth";
 import { getAnalysisHistory, getLatestReport, getRoadmap } from "@/lib/reports";
-import { formatRelative } from "@/lib/utils";
 
 export const metadata = { title: "Overview" };
+
 export default async function OverviewPage() {
   const user = await requirePageUser();
-  const [report, history, roadmap] = await Promise.all([getLatestReport(user.id), getAnalysisHistory(user.id, 3), getRoadmap(user.id)]);
-  return <div className="mx-auto max-w-[1280px] px-5 py-8 lg:px-10 lg:py-10">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-sm font-medium text-[var(--primary)]">Welcome back, {user.fullName.split(" ")[0]}</p><h1 className="text-3xl font-semibold tracking-[-.04em]">{report ? `Your path to ${report.roleTitle}` : "Build your career readiness view"}</h1><p className="mt-2 text-sm text-[var(--muted)]">{report ? `${report.experienceLevel.charAt(0).toUpperCase()+report.experienceLevel.slice(1)} target · Last analyzed ${formatRelative(report.createdAt)}` : "Your results will appear after your first evidence-based analysis."}</p></div><Button asChild><Link href="/analyze">{report ? "Analyze again" : "Start analysis"}<ArrowRight size={16} /></Link></Button></div>
-    <div className="mt-8">{report ? <AnalysisReport report={report} /> : <EmptyDashboard />}</div>
-    {report && <div className="mt-5 grid gap-5 lg:grid-cols-2"><section className="rounded-[18px] border bg-[var(--surface)] p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--muted)]">Roadmap</p><h2 className="mt-2 text-lg font-semibold">Your next learning moves</h2></div><Map size={19} className="text-[var(--primary)]" /></div>{roadmap && Array.isArray(roadmap.items) && roadmap.items.length ? <div className="mt-4 space-y-1">{(roadmap.items as Array<Record<string, unknown>>).slice(0,3).map((item,index) => <div key={String(item.id)} className="flex items-center gap-3 border-b py-3 last:border-0"><span className="grid size-7 place-items-center rounded-full bg-[var(--primary-soft)] text-[11px] font-bold text-[var(--primary)]">{index+1}</span><span className="text-sm font-medium">{String(item.skillName)}</span><span className="ml-auto text-xs capitalize text-[var(--muted)]">{String(item.status).replace("_"," ")}</span></div>)}</div> : <p className="mt-4 text-sm text-[var(--muted)]">No roadmap items are available.</p>}<Button asChild variant="ghost" className="mt-3 px-0"><Link href="/roadmap">Open roadmap <ArrowRight size={14} /></Link></Button></section><section className="rounded-[18px] border bg-[var(--surface)] p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--muted)]">Recent analysis</p><h2 className="mt-2 text-lg font-semibold">Readiness history</h2></div><Target size={19} className="text-[var(--primary)]" /></div><div className="mt-4">{history.map((item) => <Link key={String(item.id)} href={`/history/${item.id}`} className="flex items-center gap-3 border-b py-3 last:border-0"><span className="text-sm font-medium">{String(item.roleTitle)}</span><span className="ml-auto text-sm font-bold">{String(item.overallScore)}%</span><ArrowRight size={14} className="text-[var(--muted)]" /></Link>)}</div>{history.length < 2 && <p className="mt-4 text-xs text-[var(--muted)]">Complete another analysis later to track your progress.</p>}</section></div>}
-  </div>;
+  const [report, history, roadmap] = await Promise.all([
+    getLatestReport(user.id),
+    getAnalysisHistory(user.id, 12),
+    getRoadmap(user.id),
+  ]);
+  const roadmapItems = roadmap && Array.isArray(roadmap.items) ? roadmap.items : [];
+  const firstName = user.fullName.trim().split(" ")[0] || "there";
+
+  return (
+    <div className="aperio-page">
+      <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="aperio-eyebrow">Career readiness overview</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-[-.04em] sm:text-[30px]">Welcome back, {firstName}.</h1>
+          <p className="mt-2 text-sm text-[var(--muted)]">{report ? "Here’s what your current evidence says—and what to focus on next." : "Build your evidence profile to understand your strongest next career move."}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {report && <><Link href={`/analyze?role=${report.roleId}`} className="inline-flex h-10 min-w-0 items-center gap-2 rounded-[10px] border bg-[var(--surface)] px-3 text-xs font-semibold transition hover:border-[var(--border-strong)]"><BriefcaseBusiness size={14} className="text-[var(--primary)]" /><span className="max-w-44 truncate">{report.roleTitle}</span></Link><span className="inline-flex h-10 items-center gap-2 rounded-[10px] border bg-[var(--surface)] px-3 text-xs font-semibold capitalize"><Layers3 size={14} className="text-[var(--muted)]" />{report.experienceLevel} level</span></>}
+          <Button asChild><Link href={report ? `/analyze?role=${report.roleId}` : "/analyze"}><Sparkles size={15} />{report ? "Re-analyze" : "Start analysis"}</Link></Button>
+        </div>
+      </header>
+
+      <div className="mt-7">
+        {report ? <OverviewDashboard report={report} roadmapItems={roadmapItems as never[]} history={history as never[]} /> : <EmptyDashboard />}
+      </div>
+    </div>
+  );
 }
 
-function EmptyDashboard() { return <section className="overflow-hidden rounded-[22px] border bg-[var(--surface)] shadow-[var(--shadow)]"><div className="grid lg:grid-cols-[1.05fr_.95fr]"><div className="relative border-b p-7 sm:p-10 lg:border-b-0 lg:border-r"><div className="absolute right-0 top-0 size-64 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--primary)_15%,transparent),transparent_68%)]" /><p className="relative text-xs font-semibold uppercase tracking-[.14em] text-[var(--muted)]">Career match</p><div className="relative mt-8 flex items-center justify-between"><div><div className="text-6xl font-semibold tracking-[-.07em]">—</div><p className="mt-3 text-sm text-[var(--muted)]">No target role analyzed yet</p></div><span className="grid size-32 place-items-center rounded-full border-[10px] border-[var(--surface-muted)] text-[var(--muted)]"><Target size={28} /></span></div><div className="relative mt-9 flex gap-8 border-t pt-6 text-sm"><span><strong>—</strong> <span className="text-[var(--muted)]">Matched</span></span><span><strong>—</strong> <span className="text-[var(--muted)]">Developing</span></span><span><strong>—</strong> <span className="text-[var(--muted)]">Gaps</span></span></div></div><div className="bg-[var(--surface-elevated)] p-7 sm:p-10"><span className="grid size-11 place-items-center rounded-[13px] bg-[var(--primary-soft)] text-[var(--primary)]"><FileSearch size={20} /></span><h2 className="mt-6 text-xl font-semibold">Run your first analysis</h2><p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">Upload your resume or build your profile manually. Aperio will only calculate results from evidence you provide.</p><Button asChild className="mt-7"><Link href="/analyze">Start with your profile <ArrowRight size={15} /></Link></Button><p className="mt-4 text-xs text-[var(--muted)]">Your dashboard stays empty until then.</p></div></div></section>; }
+function EmptyDashboard() {
+  return (
+    <section className="aperio-panel overflow-hidden">
+      <div className="grid lg:grid-cols-[1.12fr_.88fr]">
+        <div className="relative border-b p-6 sm:p-9 lg:border-b-0 lg:border-r">
+          <div className="pointer-events-none absolute right-0 top-0 size-64 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--primary)_14%,transparent),transparent_68%)]" />
+          <p className="relative text-xs font-semibold">Career Match</p>
+          <div className="relative mt-8 flex flex-col gap-7 sm:flex-row sm:items-center sm:justify-between">
+            <div><div className="text-6xl font-semibold tracking-[-.07em] text-[var(--muted)]">—</div><p className="mt-3 text-sm font-semibold">No role analyzed yet</p><p className="mt-2 max-w-sm text-xs leading-5 text-[var(--muted)]">Your dashboard starts clean. Aperio will only show scores after it has real profile or resume evidence.</p></div>
+            <span className="grid size-28 shrink-0 place-items-center rounded-full border-[9px] border-[var(--surface-muted)] text-[var(--muted)]"><Gauge size={27} /></span>
+          </div>
+          <div className="relative mt-8 grid grid-cols-3 gap-3 border-t pt-5 text-center sm:text-left"><span><strong className="block text-lg">—</strong><span className="text-[10px] text-[var(--muted)]">Matched</span></span><span><strong className="block text-lg">—</strong><span className="text-[10px] text-[var(--muted)]">Developing</span></span><span><strong className="block text-lg">—</strong><span className="text-[10px] text-[var(--muted)]">Gaps</span></span></div>
+        </div>
+        <div className="bg-[var(--surface-elevated)] p-6 sm:p-9">
+          <span className="grid size-11 place-items-center rounded-[12px] bg-[var(--primary-soft)] text-[var(--primary)]"><FileSearch size={19} /></span>
+          <p className="aperio-eyebrow mt-6">First analysis</p>
+          <h2 className="mt-2 text-xl font-semibold tracking-[-.025em]">Turn your resume into a career map.</h2>
+          <p className="mt-3 max-w-md text-sm leading-6 text-[var(--muted)]">Select a target role, upload a verified resume, and get an evidence-backed match, skill gaps, and personal roadmap.</p>
+          <Button asChild className="mt-6"><Link href="/analyze">Analyze your profile <ArrowRight size={15} /></Link></Button>
+          <div className="mt-6 flex items-center gap-2 border-t pt-4 text-[11px] text-[var(--muted)]"><Target size={14} className="text-[var(--positive)]" />No sample scores or fabricated analytics.</div>
+        </div>
+      </div>
+    </section>
+  );
+}

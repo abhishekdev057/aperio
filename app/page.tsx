@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ArrowRight, Check, ChevronRight, FileSearch, Fingerprint, Map, Sparkles, Target } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, FileSearch, Fingerprint, Map, Target } from "lucide-react";
+import { AperioBrand } from "@/components/aperio-brand";
 import { Button } from "@/components/ui/button";
 
 export default function LandingPage() {
   return <main className="min-h-screen overflow-hidden bg-[var(--background)]">
     <header className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
-      <Link href="/" className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-[11px] bg-[var(--primary)] text-white"><Sparkles size={17} /></span><span className="text-[15px] font-bold tracking-[.12em]">APERIO</span></Link>
+      <AperioBrand />
       <nav className="flex items-center gap-2"><Button asChild variant="ghost"><Link href="/login">Sign in</Link></Button><Button asChild><Link href="/register">Get started <ArrowRight size={15} /></Link></Button></nav>
     </header>
 
