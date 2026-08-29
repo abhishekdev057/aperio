@@ -1,6 +1,6 @@
 import { query } from "@/lib/db";
 import { getTelegramConfig } from "@/lib/telegram";
-import { getIntegrationRuntime } from "@/lib/settings";
+import { getWhatsAppConfig } from "@/lib/whatsapp";
 
 export interface IntegrationsState {
   channels: Array<{
@@ -18,20 +18,8 @@ export interface IntegrationsState {
   };
   providers: {
     telegram: { configured: boolean; botUsername: string };
-    whatsapp: { configured: boolean };
+    whatsapp: { configured: boolean; businessNumber: string };
   };
-}
-
-async function whatsappConfigured() {
-  for (const key of ["whatsapp.cloud", "whatsapp.twilio"] as const) {
-    try {
-      const runtime = await getIntegrationRuntime(key);
-      if (runtime.enabled) return true;
-    } catch {
-      /* ignore */
-    }
-  }
-  return false;
 }
 
 export async function getIntegrationsState(userId: string): Promise<IntegrationsState> {
@@ -46,7 +34,7 @@ export async function getIntegrationsState(userId: string): Promise<Integrations
      FROM preferences WHERE user_id=$1`,
     [userId],
   );
-  const telegram = await getTelegramConfig();
+  const [telegram, whatsapp] = await Promise.all([getTelegramConfig(), getWhatsAppConfig()]);
   return {
     channels,
     preferences: (prefs[0] as IntegrationsState["preferences"]) ?? {
@@ -57,7 +45,7 @@ export async function getIntegrationsState(userId: string): Promise<Integrations
     },
     providers: {
       telegram: { configured: telegram.configured, botUsername: telegram.botUsername },
-      whatsapp: { configured: await whatsappConfigured() },
+      whatsapp: { configured: whatsapp.configured, businessNumber: whatsapp.businessNumber },
     },
   };
 }

@@ -41,8 +41,13 @@ async function deliver(channel: LinkedChannel, text: string) {
     await sendTelegramMessage(channel.address, text);
     return;
   }
-  // WhatsApp adapter is intentionally not implemented yet (Telegram-first).
-  throw new Error("WHATSAPP_NOT_IMPLEMENTED");
+  if (channel.platform === "whatsapp") {
+    const { getWhatsAppConfig, sendWhatsAppText } = await import("@/lib/whatsapp");
+    if (!(await getWhatsAppConfig()).configured) throw new Error("WHATSAPP_NOT_CONFIGURED");
+    await sendWhatsAppText(channel.address, text);
+    return;
+  }
+  throw new Error("UNKNOWN_CHANNEL");
 }
 
 /**

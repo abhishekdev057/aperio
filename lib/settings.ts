@@ -53,12 +53,14 @@ export const INTEGRATION_SCHEMAS: IntegrationSchema[] = [
   {
     key: "whatsapp.cloud",
     title: "WhatsApp — Meta Cloud API",
-    description: "Meta's official WhatsApp Business Cloud API. Requires a Meta app and a WhatsApp business number.",
+    description: "Meta's official WhatsApp Business Cloud API. Requires a Meta app and a WhatsApp business number. Webhook callback URL: /api/v1/integrations/whatsapp/webhook",
     fields: [
-      { name: "phoneNumberId", label: "Phone number ID", secret: false },
+      { name: "phoneNumberId", label: "Phone number ID", secret: false, help: "WhatsApp → API Setup" },
+      { name: "businessNumber", label: "Business phone (digits)", secret: false, optional: true, placeholder: "15551234567", help: "Country code + number, digits only. Builds the wa.me link users message." },
       { name: "wabaId", label: "WhatsApp Business Account ID", secret: false, optional: true },
       { name: "accessToken", label: "Access token", secret: true, help: "System-user token, long-lived." },
-      { name: "verifyToken", label: "Webhook verify token", secret: true, help: "Any random string; entered into the Meta webhook config." },
+      { name: "verifyToken", label: "Webhook verify token", secret: true, help: "Any random string. Paste the SAME value into the Meta webhook config." },
+      { name: "appSecret", label: "Meta app secret", secret: true, optional: true, help: "App → Settings → Basic. Enables X-Hub-Signature-256 verification." },
     ],
   },
   {
