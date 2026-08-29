@@ -17,6 +17,8 @@ or:
 - `POST /auth/register` — `{ fullName, email, password }` creates a user, profile, preference row, and session.
 - `POST /auth/login` — `{ email, password }` starts a session.
 - `POST /auth/logout` — clears the current session.
+- `GET /auth/google` — sets a short-lived state cookie and redirects to Google's consent screen. Returns a redirect to `/login?error=google_unavailable` when `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are unset.
+- `GET /auth/google/callback` — Google returns here with `code` and `state`. Validates state, exchanges the code with the client secret, reads the verified profile, links by `google_id` or verified email or creates a new user, starts a session, and redirects to `/onboarding` (new) or `/overview`. Failures redirect to `/login?error=...`.
 
 ## Profile and reference data
 

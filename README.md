@@ -14,7 +14,7 @@ Aperio is an evidence-based AI skill-gap analyzer for career roles. It compares 
 ## Local setup
 
 1. Install Node.js 20.9+ and npm.
-2. Copy `.env.example` to `.env.local`; set `DATABASE_URL` to a Neon connection string and `GEMINI_API_KEY` to a server-side Gemini API key. `GEMINI_KEY` is also accepted locally as a compatibility alias.
+2. Copy `.env.example` to `.env.local`; set `DATABASE_URL` to a Neon connection string and `GEMINI_API_KEY` to a server-side Gemini API key. `GEMINI_KEY` is also accepted locally as a compatibility alias. For Google sign-in, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (see Authentication below).
 3. Install dependencies with `npm install`.
 4. Create tables and seed the role/skill reference catalog:
 
@@ -38,6 +38,17 @@ The career match remains deterministic: Aperio searches actual profile/resume ev
 
 Aperio uses email/password authentication with bcrypt-hashed passwords and random, SHA-256-hashed session tokens in an HTTP-only cookie. Route handlers call `requireUser()` and every user-owned query includes the authenticated user ID for ownership checks.
 
+### Google sign-in
+
+Optional and additive; email/password keeps working when it is not configured.
+
+1. In Google Cloud Console create an OAuth 2.0 **Web application** client.
+2. Authorized JavaScript origins: `https://<your-domain>` and `http://localhost:3000`.
+3. Authorized redirect URIs: `https://<your-domain>/api/v1/auth/google/callback` and `http://localhost:3000/api/v1/auth/google/callback`.
+4. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and (in production) `APP_ORIGIN` to the public origin with no trailing slash so the redirect URI is built to match the registered one.
+
+The flow is a server-side authorization-code exchange: `GET /api/v1/auth/google` sets a signed state cookie and redirects to Google; `GET /api/v1/auth/google/callback` verifies the state, exchanges the code for tokens over TLS with the client secret, reads the verified profile from Google's userinfo endpoint, then links by `google_id`, links an existing account by verified email, or creates a new user. The client secret is server-only and never sent to the browser. Migration `003_google_oauth.sql` makes `users.password_hash` nullable and adds `google_id`, `avatar_url`, and `auth_provider`.
+
 ## API
 
 See [docs/API.md](docs/API.md) for the mobile-ready `/api/v1` contract.
@@ -53,7 +64,7 @@ npm test
 npm run build
 ```
 
-The app is Vercel-compatible: set `DATABASE_URL` and `GEMINI_API_KEY` as encrypted Vercel environment variables, optionally set `GEMINI_MODEL` (the recommended stable default is `gemini-2.5-flash`), and deploy the repository. Aperio automatically retries supported stable Flash models when a configured model is unavailable or rejects the request. No credentials are committed. Never prefix these secrets with `NEXT_PUBLIC_`.
+The app is Vercel-compatible: set `DATABASE_URL`, `GEMINI_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `APP_ORIGIN` as encrypted Vercel environment variables, optionally set `GEMINI_MODEL` (the recommended stable default is `gemini-2.5-flash`), and deploy the repository. Aperio automatically retries supported stable Flash models when a configured model is unavailable or rejects the request. No credentials are committed. Never prefix these secrets with `NEXT_PUBLIC_`.
 
 ## AI handoff
 
