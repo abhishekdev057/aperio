@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/admin";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { getIntegrationRuntime, schemaFor } from "@/lib/settings";
 import { sendTestEmail } from "@/lib/email";
+import { pingGemini } from "@/lib/gemini";
 import { telegramGetMe } from "@/lib/telegram";
 import { testUserbot } from "@/lib/telegram-userbot";
 
@@ -21,6 +22,24 @@ export async function POST(_: Request, context: { params: Promise<{ key: string 
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Send failed.";
         if (msg === "EMAIL_NOT_CONFIGURED") return ok({ ok: false, detail: "Fill the SMTP host, username, and password, then Save first." });
+        return ok({ ok: false, detail: msg });
+      }
+    }
+
+    if (key === "assistant") {
+      const rt = await getIntegrationRuntime("assistant");
+      const enabled = rt.enabled;
+      const linkedOnly = String(rt.config.linkedOnly ?? "true") !== "false";
+      try {
+        const { model, text } = await pingGemini();
+        const scope = linkedOnly ? "only signed-up users" : "everyone who messages";
+        return ok({
+          ok: true,
+          detail: `Gemini reachable via ${model}${text ? ` (said "${text}")` : ""}. Auto-reply is ${enabled ? "ON" : "OFF"}, replying to ${scope}.`,
+        });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Gemini request failed.";
+        if (msg === "GEMINI_NOT_CONFIGURED") return ok({ ok: false, detail: "Set GEMINI_API_KEY in the environment first." });
         return ok({ ok: false, detail: msg });
       }
     }

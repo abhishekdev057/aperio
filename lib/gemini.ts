@@ -251,6 +251,19 @@ export function isGeminiConfigured() {
   return Boolean(getGeminiApiKey());
 }
 
+/** Lightweight liveness check for the admin "Test connection" button. */
+export async function pingGemini() {
+  return runWithGeminiFallback("ping", async (ai, model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: 'Reply with exactly the word: ok',
+      config: { maxOutputTokens: 5, temperature: 0 },
+    });
+    const text = (response.text ?? "").trim();
+    return { model, text };
+  });
+}
+
 function parseModelJson<T>(text: string | undefined, schema: z.ZodType<T>) {
   if (!text) throw new Error("GEMINI_EMPTY_RESPONSE");
   try { return schema.parse(JSON.parse(text)); }
