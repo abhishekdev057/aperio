@@ -62,7 +62,64 @@ export async function sendWhatsAppText(to: string, body: string) {
       text: { preview_url: false, body: toWhatsAppText(body).slice(0, 4000) },
     }),
   });
-  const json = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+  const json = (await res.json().catch(() => ({}))) as { error?: { message?: string }; messages?: Array<{ id?: string }> };
   if (!res.ok) throw new Error(`WHATSAPP_SEND_FAILED: ${json?.error?.message || res.status}`);
-  return json;
+  return { externalId: json.messages?.[0]?.id ?? null };
+}
+
+const WA_TYPE_FOR_MIME = (mime: string): "image" | "audio" | "video" | "document" => {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("video/")) return "video";
+  return "document";
+};
+
+/** Download an inbound media object by its WhatsApp media id. */
+export async function downloadWhatsAppMedia(mediaId: string) {
+  const cfg = await getWhatsAppConfig();
+  if (!cfg.configured) throw new Error("WHATSAPP_NOT_CONFIGURED");
+  const metaRes = await fetch(`${GRAPH}/${mediaId}`, { headers: { authorization: `Bearer ${cfg.accessToken}` } });
+  if (!metaRes.ok) throw new Error(`WHATSAPP_MEDIA_META_FAILED: ${metaRes.status}`);
+  const meta = (await metaRes.json()) as { url?: string; mime_type?: string; file_size?: number };
+  if (!meta.url) throw new Error("WHATSAPP_MEDIA_NO_URL");
+  const binRes = await fetch(meta.url, { headers: { authorization: `Bearer ${cfg.accessToken}` } });
+  if (!binRes.ok) throw new Error(`WHATSAPP_MEDIA_DOWNLOAD_FAILED: ${binRes.status}`);
+  return { data: Buffer.from(await binRes.arrayBuffer()), mime: meta.mime_type || "application/octet-stream" };
+}
+
+/** Upload a file for sending; returns a media id. */
+export async function uploadWhatsAppMedia(data: Buffer, mime: string, filename: string) {
+  const cfg = await getWhatsAppConfig();
+  if (!cfg.configured) throw new Error("WHATSAPP_NOT_CONFIGURED");
+  const form = new FormData();
+  form.set("messaging_product", "whatsapp");
+  form.set("type", mime);
+  form.set("file", new Blob([new Uint8Array(data)], { type: mime }), filename || "upload");
+  const res = await fetch(`${GRAPH}/${cfg.phoneNumberId}/media`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${cfg.accessToken}` },
+    body: form,
+  });
+  const json = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
+  if (!res.ok || !json.id) throw new Error(`WHATSAPP_UPLOAD_FAILED: ${json?.error?.message || res.status}`);
+  return json.id;
+}
+
+export async function sendWhatsAppMedia(to: string, mediaId: string, mime: string, opts: { caption?: string; filename?: string } = {}) {
+  const cfg = await getWhatsAppConfig();
+  if (!cfg.configured) throw new Error("WHATSAPP_NOT_CONFIGURED");
+  const type = WA_TYPE_FOR_MIME(mime);
+  const payload: Record<string, unknown> = { messaging_product: "whatsapp", to: to.replace(/[^\d]/g, ""), type };
+  payload[type] =
+    type === "document"
+      ? { id: mediaId, caption: opts.caption || undefined, filename: opts.filename || undefined }
+      : { id: mediaId, caption: type === "audio" ? undefined : opts.caption || undefined };
+  const res = await fetch(`${GRAPH}/${cfg.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${cfg.accessToken}`, "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = (await res.json().catch(() => ({}))) as { error?: { message?: string }; messages?: Array<{ id?: string }> };
+  if (!res.ok) throw new Error(`WHATSAPP_SEND_FAILED: ${json?.error?.message || res.status}`);
+  return { externalId: json.messages?.[0]?.id ?? null };
 }
