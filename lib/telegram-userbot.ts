@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import { getIntegrationRuntime, setRawSecrets, type IntegrationKey } from "@/lib/settings";
 import { query } from "@/lib/db";
 import { parseLinkCode } from "@/lib/telegram";
@@ -30,10 +32,72 @@ async function makeClient(apiId: number, apiHash: string, session: string) {
   const { TelegramClient, sessions } = await tp();
   return new TelegramClient(new sessions.StringSession(session), apiId, apiHash, {
     connectionRetries: CONNECT_RETRIES,
+    // never let a client silently reconnect after we think it's closed — a
+    // lingering connection on the same session is what Telegram kills.
+    autoReconnect: false,
     deviceModel: "Aperio",
     systemVersion: "1.0",
     appVersion: "1.0",
   });
+}
+
+// --- session lease: only one live MTProto client per stored session ---------
+
+const LOCK_TTL_SEC = 90;
+const FATAL_SESSION =
+  /AUTH_KEY_UNREGISTERED|AUTH_KEY_DUPLICATED|SESSION_REVOKED|SESSION_EXPIRED|Concurrent usage|USER_DEACTIVATED|key is not registered/i;
+
+async function acquireLock(waitMs: number): Promise<string | null> {
+  const holder = randomUUID();
+  const deadline = Date.now() + Math.max(0, waitMs);
+  for (;;) {
+    const rows = await query<{ holder: string }>(
+      `UPDATE userbot_lock SET holder = $1, acquired_at = now()
+       WHERE id = 1 AND (holder IS NULL OR acquired_at < now() - make_interval(secs => $2))
+       RETURNING holder`,
+      [holder, LOCK_TTL_SEC],
+    ).catch(() => [] as { holder: string }[]);
+    if (rows[0]?.holder === holder) return holder;
+    if (Date.now() >= deadline) return null;
+    await new Promise((r) => setTimeout(r, 1_500));
+  }
+}
+
+async function releaseLock(holder: string) {
+  await query(`UPDATE userbot_lock SET holder = NULL, acquired_at = NULL WHERE holder = $1`, [holder]).catch(() => {});
+}
+
+/**
+ * Run `fn` with the one and only connected user-bot client. Serialised across
+ * the whole deployment by a DB lease so a send never races a sync on the same
+ * session. `waitMs: 0` makes opportunistic callers (sync) bail instead of queue.
+ */
+async function withUserbot<T>(opts: { waitMs?: number }, fn: (client: any) => Promise<T>): Promise<T> {
+  const { apiId, apiHash, rt } = await creds();
+  const session = rt.secret("stringSession");
+  if (!apiId || !apiHash || !session) throw new Error("USERBOT_NOT_LOGGED_IN");
+
+  const lock = await acquireLock(opts.waitMs ?? 45_000);
+  if (!lock) throw new Error("USERBOT_BUSY");
+
+  const client = await makeClient(apiId, apiHash, session);
+  try {
+    await client.connect();
+    const fresh = client.session.save();
+    if (typeof fresh === "string" && fresh.length > 20 && fresh !== session) {
+      await setRawSecrets(KEY, { stringSession: fresh, _sessionError: null }).catch(() => {});
+    }
+    return await fn(client);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (FATAL_SESSION.test(msg)) {
+      await setRawSecrets(KEY, { _sessionError: msg.slice(0, 300) }).catch(() => {});
+    }
+    throw error;
+  } finally {
+    await client.disconnect().catch(() => {});
+    await releaseLock(lock);
+  }
 }
 
 async function creds() {
@@ -97,6 +161,7 @@ export async function signInUserbot(code: string, password?: string) {
       username: me?.username ?? "",
       _pendingCodeHash: null,
       _pendingSession: null,
+      _sessionError: null,
     });
     return {
       linked: true,
@@ -115,19 +180,19 @@ export async function signInUserbot(code: string, password?: string) {
 /** Connection test using the stored session. */
 export async function testUserbot() {
   const { apiId, apiHash, rt } = await creds();
-  const session = rt.secret("stringSession");
   if (!apiId || !apiHash) return { ok: false, detail: "Add the API ID and API hash first." };
-  if (!session) return { ok: false, detail: "Not logged in yet — send an OTP and sign in below." };
+  if (!rt.secret("stringSession")) return { ok: false, detail: "Not logged in yet — send an OTP and sign in below." };
 
-  const client = await makeClient(apiId, apiHash, session);
   try {
-    await client.connect();
-    const me = await client.getMe();
-    return { ok: true, detail: `Logged in as ${me?.username ? `@${me.username}` : me?.firstName ?? "user"}` };
+    return await withUserbot({ waitMs: 25_000 }, async (client) => {
+      const me = await client.getMe();
+      return { ok: true, detail: `Logged in as ${me?.username ? `@${me.username}` : me?.firstName ?? "user"}` };
+    });
   } catch (error) {
-    return { ok: false, detail: error instanceof Error ? error.message : "Connection failed." };
-  } finally {
-    await client.disconnect().catch(() => {});
+    const detail = error instanceof Error ? error.message : "Connection failed.";
+    if (detail === "USERBOT_BUSY") return { ok: false, detail: "Busy syncing — try again in a few seconds." };
+    if (FATAL_SESSION.test(detail)) return { ok: false, detail: "Session was invalidated by Telegram. Send a new OTP and sign in again." };
+    return { ok: false, detail };
   }
 }
 
@@ -139,19 +204,11 @@ export async function userbotStatus() {
     pending: Boolean(rt.secret("_pendingCodeHash")),
     phone: String(rt.config.phone ?? ""),
     username: (rt.secret("username") ?? "").replace(/^@/, ""),
+    sessionError: rt.secret("_sessionError") || null,
   };
 }
 
 // --- chat workspace: sync + send -----------------------------------------
-
-async function connectedClient() {
-  const { apiId, apiHash, rt } = await creds();
-  const session = rt.secret("stringSession");
-  if (!apiId || !apiHash || !session) return null;
-  const client = await makeClient(apiId, apiHash, session);
-  await client.connect();
-  return client;
-}
 
 function mediaKind(msg: any): { kind: MessageKind; mime: string; name: string | null } | null {
   if (msg.photo) return { kind: "image", mime: "image/jpeg", name: null };
@@ -183,14 +240,9 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
   );
   if (!lock[0]) return { skipped: true };
 
-  const client = await connectedClient();
-  if (!client) {
-    await query(`UPDATE chat_sync_state SET running=false, detail='not logged in' WHERE channel='telegram_userbot'`);
-    return { skipped: true, reason: "not_logged_in" };
-  }
-
   let stored = 0;
   try {
+    await withUserbot({ waitMs: 0 }, async (client) => {
     const dialogs = await client.getDialogs({ limit: maxDialogs });
     for (const dialog of dialogs) {
       const entity: any = dialog.entity;
@@ -277,13 +329,15 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40) {
         }
       }
     }
+    });
     await query(`UPDATE chat_sync_state SET running=false, detail=$1, synced_at=now() WHERE channel='telegram_userbot'`, [`ok, ${stored} new`]);
     return { stored };
   } catch (error) {
-    await query(`UPDATE chat_sync_state SET running=false, detail=$1 WHERE channel='telegram_userbot'`, [error instanceof Error ? error.message.slice(0, 200) : "error"]);
+    const msg = error instanceof Error ? error.message : "error";
+    await query(`UPDATE chat_sync_state SET running=false, detail=$1 WHERE channel='telegram_userbot'`, [msg.slice(0, 200)]);
+    if (msg === "USERBOT_BUSY") return { skipped: true, reason: "busy" };
+    if (msg === "USERBOT_NOT_LOGGED_IN") return { skipped: true, reason: "not_logged_in" };
     throw error;
-  } finally {
-    await client.disconnect().catch(() => {});
   }
 }
 
@@ -308,10 +362,8 @@ function messageIdFromUpdates(updates: any): string | null {
 export async function sendUserbotMessage(threadId: string, input: { text?: string; file?: { data: Buffer; mime: string; name: string } }) {
   const thread = await getThreadForSend(threadId);
   if (!thread || thread.channel !== "telegram_userbot") throw new Error("THREAD_NOT_FOUND");
-  const client = await connectedClient();
-  if (!client) throw new Error("USERBOT_NOT_LOGGED_IN");
   const { Api } = await tp();
-  try {
+  return withUserbot({ waitMs: 45_000 }, async (client) => {
     const peer = resolvePeer(Api, thread);
     let sent: any;
     if (input.file) {
@@ -326,19 +378,15 @@ export async function sendUserbotMessage(threadId: string, input: { text?: strin
     }
     const msg = Array.isArray(sent) ? sent[0] : sent;
     return { externalId: msg?.id != null ? String(msg.id) : null };
-  } finally {
-    await client.disconnect().catch(() => {});
-  }
+  });
 }
 
 /** Send a real native Telegram poll (non-anonymous) through the user bot. */
 export async function sendUserbotPoll(threadId: string, question: string, options: string[]) {
   const thread = await getThreadForSend(threadId);
   if (!thread || thread.channel !== "telegram_userbot") throw new Error("THREAD_NOT_FOUND");
-  const client = await connectedClient();
-  if (!client) throw new Error("USERBOT_NOT_LOGGED_IN");
   const { Api, helpers } = await tp();
-  try {
+  return withUserbot({ waitMs: 45_000 }, async (client) => {
     const peer = resolvePeer(Api, thread);
     const poll = new Api.Poll({
       id: helpers.generateRandomBigInt(),
@@ -356,25 +404,19 @@ export async function sendUserbotPoll(threadId: string, question: string, option
       randomId: helpers.generateRandomBigInt(),
     }));
     return { externalId: messageIdFromUpdates(updates) };
-  } finally {
-    await client.disconnect().catch(() => {});
-  }
+  });
 }
 
 /** Direct send to a Telegram user by their id + access hash (used by notifications). */
 export async function sendUserbotDirect(address: string, accessHash: string | null, text: string) {
-  const client = await connectedClient();
-  if (!client) throw new Error("USERBOT_NOT_LOGGED_IN");
   const { Api } = await tp();
-  try {
+  await withUserbot({ waitMs: 45_000 }, async (client) => {
     const peer = new Api.InputPeerUser({
       userId: BigInt(address.replace(/\D/g, "")),
       accessHash: accessHash ? BigInt(accessHash) : 0n,
     });
     await client.sendMessage(peer, { message: text });
-  } finally {
-    await client.disconnect().catch(() => {});
-  }
+  });
 }
 
 export async function isUserbotLoggedIn() {

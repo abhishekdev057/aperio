@@ -155,7 +155,7 @@ function UserbotPanel({ integration }: { integration: Integration }) {
   const [config, setConfig] = useState<Record<string, string>>({ ...integration.config });
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [state, setState] = useState(integration);
-  const [status, setStatus] = useState<{ hasCreds: boolean; loggedIn: boolean; pending: boolean; phone: string } | null>(null);
+  const [status, setStatus] = useState<{ hasCreds: boolean; loggedIn: boolean; pending: boolean; phone: string; sessionError?: string | null } | null>(null);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState("");
   const [code, setCode] = useState("");
@@ -265,6 +265,12 @@ function UserbotPanel({ integration }: { integration: Integration }) {
           <span className={cn("size-2 rounded-full", status.loggedIn ? "bg-[var(--positive)]" : status.pending ? "bg-[var(--attention)]" : "bg-[var(--muted)]")} />
           {status.loggedIn ? "Logged in — session stored" : status.pending ? "OTP sent, awaiting code" : status.hasCreds ? "Credentials saved, not logged in" : "No credentials yet"}
         </div>
+      )}
+
+      {status?.sessionError && (
+        <p className="mt-2 rounded-[9px] border border-[var(--critical)]/40 bg-[var(--critical)]/5 px-3 py-2 text-xs text-[var(--critical)]">
+          Telegram invalidated the stored session ({status.sessionError}). Send a new OTP and sign in again — one login is enough; concurrent connections are now serialised so it won&apos;t drop on its own.
+        </p>
       )}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
