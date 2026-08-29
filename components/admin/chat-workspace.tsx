@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, CheckCheck, LoaderCircle, MessageCircle, Paperclip, Plus, Search, Send } from "lucide-react";
+import { AlertCircle, Check, CheckCheck, Download, LoaderCircle, Maximize2, MessageCircle, Paperclip, Play, Plus, Search, Send, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -45,24 +45,74 @@ function timeLabel(iso: string | null) {
     : d.toLocaleDateString([], { day: "numeric", month: "short" });
 }
 
-function MediaBubble({ message }: { message: Message }) {
+type Preview = { src: string; kind: "image" | "video"; name: string };
+
+function MediaBubble({ message, onOpen }: { message: Message; onOpen: (p: Preview) => void }) {
   const src = `/api/v1/admin/chat/media/${message.id}`;
+  const name = message.mediaName || `${message.kind}-${message.id.slice(0, 6)}`;
+
   if (message.kind === "image" || message.kind === "sticker") {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={message.mediaName ?? "image"} className="mt-1 max-h-72 max-w-full rounded-[10px]" loading="lazy" />;
+    return (
+      <button type="button" onClick={() => onOpen({ src, kind: "image", name })} className="group relative mt-1 block overflow-hidden rounded-[10px]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={name} className="max-h-72 max-w-full" loading="lazy" />
+        <span className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-black/55 text-white opacity-0 transition group-hover:opacity-100"><Maximize2 size={12} /></span>
+      </button>
+    );
   }
   if (message.kind === "video") {
-    return <video src={src} controls className="mt-1 max-h-72 max-w-full rounded-[10px]" preload="metadata" />;
+    return (
+      <button type="button" onClick={() => onOpen({ src, kind: "video", name })} className="group relative mt-1 block overflow-hidden rounded-[10px]">
+        <video src={src} className="max-h-72 max-w-full" preload="metadata" muted />
+        <span className="absolute inset-0 grid place-items-center bg-black/25"><span className="grid size-10 place-items-center rounded-full bg-black/60 text-white"><Play size={18} /></span></span>
+      </button>
+    );
   }
   if (message.kind === "audio" || message.kind === "voice") {
     return <audio src={src} controls className="mt-1 w-56" preload="none" />;
   }
   return (
-    <a href={src} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-2 rounded-[10px] border bg-[var(--surface)] px-3 py-2 text-xs font-medium">
-      <Paperclip size={13} />
-      {message.mediaName || "file"}
-      {message.mediaSize ? <span className="text-[var(--muted)]">· {Math.round(message.mediaSize / 1024)} KB</span> : null}
+    <a href={`${src}?download=1`} download={name} className="mt-1 flex items-center gap-2 rounded-[10px] border bg-[var(--surface)] px-3 py-2 text-xs font-medium hover:border-[var(--primary)]">
+      <Paperclip size={13} className="shrink-0" />
+      <span className="min-w-0 truncate">{name}</span>
+      {message.mediaSize ? <span className="shrink-0 text-[var(--muted)]">· {Math.round(message.mediaSize / 1024)} KB</span> : null}
+      <Download size={13} className="ml-auto shrink-0 text-[var(--primary)]" />
     </a>
+  );
+}
+
+function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/85 backdrop-blur-sm" onClick={onClose}>
+      <div className="flex items-center justify-between px-5 py-3 text-white">
+        <span className="truncate text-sm font-medium">{preview.name}</span>
+        <div className="flex items-center gap-2">
+          <a
+            href={`${preview.src}?download=1`}
+            download={preview.name}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 rounded-[9px] bg-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/25"
+          >
+            <Download size={14} />Download
+          </a>
+          <button onClick={onClose} className="grid size-8 place-items-center rounded-[9px] hover:bg-white/15"><X size={18} /></button>
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1 items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+        {preview.kind === "image" ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={preview.src} alt={preview.name} className="max-h-full max-w-full object-contain" />
+        ) : (
+          <video src={preview.src} controls autoPlay className="max-h-full max-w-full" />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -76,6 +126,7 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
+  const [preview, setPreview] = useState<Preview | null>(null);
   const [contacts, setContacts] = useState<Array<{ userId: string; name: string; email: string; channels: Array<{ platform: string; address: string; handle: string | null }> }>>([]);
   const [newChannel, setNewChannel] = useState<"whatsapp" | "telegram_userbot">("whatsapp");
   const [newPeer, setNewPeer] = useState("");
@@ -348,7 +399,7 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
                   <div key={m.id} className={cn("flex", m.direction === "out" ? "justify-end" : "justify-start")}>
                     <div className={cn("max-w-[75%] rounded-[12px] px-3 py-2 text-sm", m.direction === "out" ? "bg-[var(--primary)] text-white" : "bg-[var(--surface)] border")}>
                       {m.text && <p className="whitespace-pre-wrap break-words">{m.text}</p>}
-                      {m.kind !== "text" && <MediaBubble message={m} />}
+                      {m.kind !== "text" && <MediaBubble message={m} onOpen={setPreview} />}
                       <span className={cn("mt-0.5 flex items-center justify-end gap-1 text-[10px]", m.direction === "out" ? "text-white/70" : "text-[var(--muted)]")}>
                         {timeLabel(m.createdAt)}
                         {m.direction === "out" && (m.status === "failed" ? <AlertCircle size={11} /> : m.status === "pending" ? <LoaderCircle size={10} className="animate-spin" /> : m.status === "read" || m.status === "delivered" ? <CheckCheck size={11} /> : <Check size={11} />)}
@@ -401,6 +452,8 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
           )}
         </div>
       </div>
+
+      {preview && <Lightbox preview={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }
