@@ -1,15 +1,16 @@
 /**
- * Market signal ingestion.
+ * Market signal ingestion (manual / local runner).
+ *
+ * On the deployed app this runs daily via the Vercel cron at
+ * /api/v1/cron/market (see lib/market.ts `ingestMarketSignals`). Use this script
+ * to run it by hand or from your own worker.
  *
  * For every enabled row in `market_sources`, pull real job postings and count how
  * often each catalog skill is mentioned, then store one dated observation per
- * skill (weighted later by the source's weight in lib/market.ts). No fabricated
- * numbers — a source with no reachable data simply writes nothing.
+ * skill. No fabricated numbers — a source with no reachable data writes nothing.
+ * Implemented source: Arbeitnow (free, integration key `jobs.arbeitnow`).
  *
- * Implemented source: Arbeitnow (free public job board, no key). Link a source in
- * Admin → Job market with integration key `jobs.arbeitnow`.
- *
- * Run: tsx scripts/ingest-market.ts   (schedule it so 2+ captures accumulate)
+ * Run: tsx scripts/ingest-market.ts
  */
 import { randomUUID } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
