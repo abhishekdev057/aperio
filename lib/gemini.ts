@@ -219,11 +219,11 @@ export async function generateCareerDiagnostics(input: {
   roleTitle: string;
   experienceLevel: ExperienceLevel;
   overallScore: number;
-  skills: Array<{ skillId: string; name: string; category: string; classification: string; currentLevel: number; targetLevel: number; importance: Importance; evidence: Array<{ quote: string; source: string }> }>;
+  skills: Array<{ skillId: string; name: string; category: string; skillType?: string; classification: string; currentLevel: number; targetLevel: number; importance: Importance; evidence: Array<{ quote: string; source: string }> }>;
 }) {
   const prompt = `Create a personalized, concise career-readiness interpretation from the supplied JSON only.
 Do not change the score or classifications. Do not invent evidence, market demand, salary data, courses, links, certificates, or guaranteed timelines.
-Phrase missing skills as not demonstrated in the current profile. Recommendations must be concrete, project-oriented, and appropriate for the target level.
+Phrase missing skills as not demonstrated in the current profile. Recommendations must be concrete and appropriate for the target level: project-oriented for technical skills, and situation/behaviour-oriented (scope to take on, feedback to seek, an example to be able to tell) for skills where skillType is "soft".
 Use phase 1 for foundational/high-impact gaps, phase 2 for production practice, and phase 3 for systems-level depth.
 Return one recommendation for every developing or missing skill, using the exact supplied skillId.
 

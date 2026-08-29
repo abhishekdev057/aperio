@@ -22,6 +22,7 @@ export const skillLevelLabel: Record<number, string> = {
 
 export type Classification = "strong" | "developing" | "missing";
 export type Importance = "critical" | "high" | "medium" | "optional";
+export type SkillType = "technical" | "soft";
 export type RoadmapStatus = "not_started" | "in_progress" | "completed";
 
 export interface SessionUser {
@@ -46,6 +47,7 @@ export interface AnalysisSkill {
   category: string;
   description: string;
   classification: Classification;
+  skillType: SkillType;
   currentLevel: number;
   targetLevel: number;
   confidence: number;

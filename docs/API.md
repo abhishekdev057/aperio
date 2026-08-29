@@ -39,6 +39,7 @@ or:
 - `GET /analyses/:id` — owned report with evidence and skill results.
 - `GET /history` — history alias.
 - `GET /role-comparison?left=:analysisId&right=:analysisId` — compares two owned analyses.
+- `GET /market?roleId=:id&level=junior|mid|senior&region=global` — returns `{ leverage, outlook }`. `leverage` is computed from the seeded catalog (per-skill `roleCount`, `criticalCount`, `leverageIndex` 0–100). `outlook` is `{ connected: false, ... }` until a job-postings source is ingested; when connected it returns latest `signals` and linear `projections` built only from real dated observations. Never returns fabricated demand numbers.
 
 ## Roadmaps
 

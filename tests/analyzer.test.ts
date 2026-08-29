@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateScore, classifySkill, inferSkill } from "@/lib/analyzer";
+import { calculateScore, classifySkill, inferSkill, inferSoftSkill } from "@/lib/analyzer";
 
 describe("Aperio analyzer", () => {
   it("captures evidence and a working level from applied resume language", () => {
@@ -7,6 +7,16 @@ describe("Aperio analyzer", () => {
     expect(result.level).toBe(2);
     expect(result.evidence[0]).toContain("React");
     expect(result.confidence).toBeGreaterThan(0.6);
+  });
+
+  it("credits a soft skill only from behavioural evidence and reads leadership language", () => {
+    const none = inferSoftSkill("Proficient in Python and SQL.", ["leadership", "led"]);
+    expect(none.level).toBe(0);
+    expect(none.evidence).toHaveLength(0);
+
+    const led = inferSoftSkill("Led a team of four engineers and mentored two juniors to promotion.", ["leadership", "led", "mentored"]);
+    expect(led.level).toBeGreaterThanOrEqual(3);
+    expect(led.evidence[0]).toContain("Led");
   });
 
   it("uses constructive classifications", () => {

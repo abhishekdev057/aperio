@@ -12,6 +12,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
+    "market:ingest": "tsx scripts/ingest-market.ts",
     "ai:handoff": "tsx scripts/create-handoff.ts"
   },
   "dependencies": {

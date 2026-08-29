@@ -20,7 +20,7 @@ function SkillRow({ skill, onOpen }: { skill: AnalysisSkill; onOpen: () => void 
   const state = styles[skill.classification]; const Icon = state.icon;
   return <button onClick={onOpen} className="group grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 border-b py-4 text-left last:border-b-0 hover:bg-[var(--surface-elevated)] sm:gap-4 sm:px-2">
     <span className="grid size-9 place-items-center rounded-[10px]" style={{ color: state.color, background: state.soft }}><Icon size={16} /></span>
-    <span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="font-semibold">{skill.name}</span><Badge className="text-[var(--muted)]">{importanceLabel[skill.importance]}</Badge></span><span className="mt-1 block truncate text-xs text-[var(--muted)]">{skill.evidence[0]?.quote || "No clear evidence found in the current profile"}</span></span>
+    <span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="font-semibold">{skill.name}</span><Badge className="text-[var(--muted)]">{importanceLabel[skill.importance]}</Badge>{skill.skillType === "soft" && <Badge className="border-[var(--primary)] text-[var(--primary)]">Soft skill</Badge>}</span><span className="mt-1 block truncate text-xs text-[var(--muted)]">{skill.evidence[0]?.quote || "No clear evidence found in the current profile"}</span></span>
     <span className="flex items-center gap-2 text-xs font-medium text-[var(--muted)]"><span className="hidden sm:inline">{skillLevelLabel[skill.currentLevel]} → {skillLevelLabel[skill.targetLevel]}</span><ChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" /></span>
   </button>;
 }

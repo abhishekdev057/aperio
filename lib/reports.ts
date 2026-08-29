@@ -29,7 +29,7 @@ export async function getAnalysisReport(userId: string, analysisId: string): Pro
   );
   if (!report) return null;
   const skills = await query<AnalysisSkill & Record<string, unknown>>(
-    `SELECT ar.id,ar.skill_id AS "skillId",s.name,s.category,s.description,ar.classification,
+    `SELECT ar.id,ar.skill_id AS "skillId",s.name,s.category,s.description,s.skill_type AS "skillType",ar.classification,
       ar.current_level AS "currentLevel",ar.target_level AS "targetLevel",ar.confidence,ar.importance,
       ar.evidence,ar.recommendation,ar.why_it_matters AS "whyItMatters"
      FROM analysis_skill_results ar JOIN skills s ON s.id=ar.skill_id

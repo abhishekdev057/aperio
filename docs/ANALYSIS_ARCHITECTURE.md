@@ -33,7 +33,8 @@ PDF and image uploads use Gemini document vision directly. DOCX files are parsed
 | Weighted role matching | Use now | It maps directly to stored `role_skill_requirements`, target levels, importance, and weights. |
 | Declared proficiency + recency + assessment score | Use when data exists | The model is useful, but Aperio does not yet have a validated assessment engine or complete recency data. Treating absent values as real would create false precision. |
 | Adjacent-role discovery | Partial now | Users can analyze and compare multiple roles. Automatic adjacent-role ranking should be added only after enough verified profile evidence exists. |
-| Live market urgency | Defer | It requires a trustworthy, current job-posting dataset and location/time filters. Static demand numbers would violate the no-fake-data rule. |
+| Live market urgency | Structured, data-gated | `market_signals` + `lib/market.ts` are in place as a **separate timestamped signal** that never alters the evidence score. In-catalog leverage (roles-per-skill) is computed and shown now; live demand and forecasts stay dark until `scripts/ingest-market.ts` is pointed at a real job-postings source. No static demand numbers are displayed. |
+| Soft-skill assessment | Use now | Soft skills are first-class in the catalog (`skill_type='soft'`) and scored through the weighted pipeline using behavioural-evidence inference. Absence is "not demonstrated", not a deficit claim. |
 | Exact learning velocity/mastery date | Do not expose as a promise | Effort depends on prior knowledge, practice quality, and available time. Aperio uses qualitative effort labels and progress states instead. |
 | Course/capstone monetization | Defer | Recommendations must optimize the user's skill gap, not a price or margin, until a transparent resource catalog exists. |
 

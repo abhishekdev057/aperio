@@ -34,6 +34,17 @@ Resume uploads are validated for size, MIME type, and file signature before Gemi
 
 The career match remains deterministic: Aperio searches actual profile/resume evidence, compares it with stored role requirements, assigns transparent levels, and calculates a weighted score. Gemini cannot change the score or classifications; it converts those grounded results into a concise summary and personalized project-oriented roadmap. If career diagnostics are temporarily unavailable, deterministic guidance is used instead.
 
+### Soft skills
+
+The skill catalog carries `skill_type` (`technical` or `soft`). Soft skills (communication, collaboration, problem solving, ownership, leadership, mentoring, stakeholder management, adaptability, critical thinking, time management) are scored through the same weighted pipeline, but inference uses behavioural evidence — action language in the resume/profile such as "led a team", "collaborated across", "root-caused", "mentored" — instead of tool keywords. No matching evidence stays "not demonstrated"; it is never read as "the person lacks it".
+
+### Market outlook
+
+Two separated demand signals, neither of which changes a match score:
+
+1. **In-catalog leverage** — computed only from seeded role/skill data: how many tracked roles need a skill and how often it is critical. Always available.
+2. **Live market outlook** — reads the `market_signals` table, which stays empty until a real job-postings source is ingested with `npm run market:ingest` (implement `fetchObservations()` in `scripts/ingest-market.ts`). With no data Aperio reports "not connected" and shows no numbers. A forecast is a linear projection returned only when two or more real dated observations exist for a skill.
+
 ## Authentication
 
 Aperio uses email/password authentication with bcrypt-hashed passwords and random, SHA-256-hashed session tokens in an HTTP-only cookie. Route handlers call `requireUser()` and every user-owned query includes the authenticated user ID for ownership checks.

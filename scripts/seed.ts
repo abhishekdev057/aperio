@@ -56,6 +56,21 @@ const skills = [
   ["incident-response", "Incident Response", "Security", "Coordinates detection, containment, recovery, and learning from security events.", ["incident response", "soc", "siem", "threat detection"]],
 ] as const;
 
+// Soft / professional skills. Aliases double as the behavioural phrases the
+// analyzer looks for as evidence in a resume or profile.
+const softSkills = [
+  ["communication", "Communication", "Professional Skills", "Explains ideas, decisions, and trade-offs clearly to technical and non-technical audiences.", ["communication", "communicated", "presented", "presentation", "wrote documentation", "articulated", "explained", "public speaking", "technical writing"]],
+  ["collaboration", "Collaboration", "Professional Skills", "Works effectively across roles and teams toward a shared outcome.", ["collaboration", "collaborated", "cross-functional", "cross functional", "partnered with", "worked closely with", "paired with", "team player", "co-ordinated with"]],
+  ["problem-solving", "Problem Solving", "Professional Skills", "Breaks ambiguous problems into workable steps and reaches sound decisions.", ["problem solving", "problem-solving", "root cause", "root-caused", "troubleshot", "debugged", "diagnosed", "resolved", "analysed the issue", "analyzed the issue"]],
+  ["adaptability", "Adaptability", "Professional Skills", "Adjusts quickly to changing priorities, tools, and constraints.", ["adaptability", "adapted", "learned quickly", "picked up", "shifting priorities", "fast-paced", "ambiguity", "pivoted"]],
+  ["ownership", "Ownership & Accountability", "Professional Skills", "Takes end-to-end responsibility for outcomes, not just assigned tasks.", ["ownership", "owned", "end-to-end", "took responsibility", "accountable for", "drove", "delivered", "saw it through"]],
+  ["leadership", "Leadership", "Professional Skills", "Guides direction, sets standards, and enables others to do their best work.", ["leadership", "led", "led a team", "managed a team", "line-managed", "set the direction", "headed", "spearheaded", "chaired"]],
+  ["stakeholder-management", "Stakeholder Management", "Professional Skills", "Aligns expectations and communicates progress with clients, partners, and leadership.", ["stakeholder", "stakeholders", "client-facing", "customer-facing", "liaised", "reported to leadership", "managed expectations", "requirements gathering"]],
+  ["mentoring", "Mentoring & Coaching", "Professional Skills", "Grows other people's skills through feedback, pairing, and structured guidance.", ["mentoring", "mentored", "coached", "onboarded", "trained", "gave feedback", "code review feedback", "taught"]],
+  ["critical-thinking", "Critical Thinking", "Professional Skills", "Weighs evidence and trade-offs before committing to a course of action.", ["critical thinking", "evaluated trade-offs", "weighed options", "assessed risk", "data-informed", "evidence-based decision", "prioritised based on"]],
+  ["time-management", "Time Management", "Professional Skills", "Plans, sequences, and delivers work against deadlines with limited supervision.", ["time management", "prioritised", "prioritized", "met deadlines", "managed competing", "planned the sprint", "estimated", "delivered on schedule"]],
+] as const;
+
 const roles = [
   ["full-stack-developer", "Full Stack Developer", "Builds complete web products across frontend, backend, data, and delivery.", "Engineering"],
   ["frontend-developer", "Frontend Developer", "Creates accessible, responsive, and maintainable web experiences.", "Engineering"],
@@ -84,13 +99,33 @@ const requirements: Record<string, Requirement[]> = {
   "mobile-developer": [["javascript","high",8],["typescript","critical",9],["react-native","critical",10],["mobile-ux","high",8],["rest-apis","high",8],["testing","high",8],["git","high",6],["authentication","high",7],["cicd","medium",5],["observability","medium",5]],
 };
 
+// Applied to every role. Target level still scales with seniority through the
+// junior/mid/senior offset below, so "leadership" is target 1 for a junior and
+// target 3 for a senior.
+const softRequirements: Requirement[] = [
+  ["problem-solving", "critical", 8],
+  ["communication", "high", 7],
+  ["collaboration", "high", 7],
+  ["ownership", "high", 6],
+  ["adaptability", "medium", 5],
+  ["critical-thinking", "medium", 5],
+  ["time-management", "medium", 4],
+  ["stakeholder-management", "medium", 4],
+  ["leadership", "medium", 4],
+  ["mentoring", "optional", 3],
+];
+
 async function main() {
-for (const [slug, name, category, description, aliases] of skills) {
+const allSkills = [
+  ...skills.map(([slug, name, category, description, aliases]) => ({ slug, name, category, description, aliases, type: "technical" as const })),
+  ...softSkills.map(([slug, name, category, description, aliases]) => ({ slug, name, category, description, aliases, type: "soft" as const })),
+];
+for (const { slug, name, category, description, aliases, type } of allSkills) {
   await sql.query(
-    `INSERT INTO skills (id, slug, name, category, description, aliases)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name, category=EXCLUDED.category, description=EXCLUDED.description, aliases=EXCLUDED.aliases, updated_at=now()`,
-    [`skill-${slug}`, slug, name, category, description, aliases],
+    `INSERT INTO skills (id, slug, name, category, description, aliases, skill_type)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name, category=EXCLUDED.category, description=EXCLUDED.description, aliases=EXCLUDED.aliases, skill_type=EXCLUDED.skill_type, updated_at=now()`,
+    [`skill-${slug}`, slug, name, category, description, aliases, type],
   );
 }
 
@@ -102,7 +137,7 @@ for (const [slug, title, description, category] of roles) {
     [`role-${slug}`, slug, title, description, category],
   );
 
-  for (const [skillSlug, importance, weight] of requirements[slug]) {
+  for (const [skillSlug, importance, weight] of [...requirements[slug], ...softRequirements]) {
     for (const [level, targetOffset] of [["junior", -1], ["mid", 0], ["senior", 1]] as const) {
       const midTarget = importance === "critical" ? 3 : importance === "high" ? 2 : 2;
       const target = Math.max(1, Math.min(4, midTarget + targetOffset));
@@ -116,7 +151,7 @@ for (const [slug, title, description, category] of roles) {
   }
 }
 
-console.log(`Seeded ${skills.length} skills and ${roles.length} roles.`);
+console.log(`Seeded ${skills.length} technical + ${softSkills.length} soft skills and ${roles.length} roles.`);
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });

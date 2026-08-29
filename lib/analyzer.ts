@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { db, one, query } from "@/lib/db";
 import type { Classification, ExperienceLevel, Importance } from "@/lib/types";
 
+type SkillType = "technical" | "soft";
+
 interface RequirementRow extends Record<string, unknown> {
   skillId: string;
   name: string;
@@ -11,6 +13,7 @@ interface RequirementRow extends Record<string, unknown> {
   targetLevel: number;
   importance: Importance;
   weight: string;
+  skillType: SkillType;
 }
 
 interface ExistingSkillRow extends Record<string, unknown> {
@@ -53,6 +56,7 @@ export interface ScoredSkill {
   confidence: number;
   importance: Importance;
   weight: number;
+  skillType: SkillType;
   evidence: Array<{ quote: string; source: string }>;
   recommendation: string;
   whyItMatters: string;
@@ -79,6 +83,27 @@ export function inferSkill(text: string, aliases: string[]) {
   return { level, confidence, evidence };
 }
 
+// Soft skills are demonstrated through behaviour described in the profile, not
+// through tools. We only credit a level when the text actually contains matching
+// action language; absence stays "not demonstrated", never "does not have it".
+const softLeadershipSignals = /\b(led|managed|mentored|coached|line-managed|headed|spearheaded|chaired|set the direction|drove consensus|influenced|facilitated|negotiated|presented to (leadership|executives|the board)|owned the (outcome|delivery|roadmap))\b/;
+const softAppliedSignals = /\b(collaborated|coordinated|partnered|communicated|presented|documented|liaised|resolved|root[- ]caused|diagnosed|prioriti[sz]ed|estimated|onboarded|trained|gave feedback|reviewed|adapted|delivered)\b/;
+
+export function inferSoftSkill(text: string, aliases: string[]) {
+  const evidence = sentenceEvidence(text, aliases);
+  if (!evidence.length) return { level: 0, confidence: 0.2, evidence: [] as string[] };
+  const combined = evidence.join(" ").toLowerCase();
+  const hasLeadership = softLeadershipSignals.test(combined);
+  const hasApplied = softAppliedSignals.test(combined);
+  const level = hasLeadership
+    ? Math.min(4, 3 + (evidence.length > 1 ? 1 : 0))
+    : hasApplied || evidence.length > 1
+      ? 2
+      : 1;
+  const confidence = Math.min(0.92, 0.5 + evidence.length * 0.1 + (hasLeadership ? 0.12 : hasApplied ? 0.06 : 0));
+  return { level, confidence, evidence };
+}
+
 export function classifySkill(currentLevel: number, targetLevel: number): Classification {
   if (currentLevel >= targetLevel) return "strong";
   if (currentLevel > 0) return "developing";
@@ -92,7 +117,11 @@ export function calculateScore(skills: Array<Pick<ScoredSkill, "currentLevel" | 
   return Math.round((achieved / possible) * 100);
 }
 
-function recommendation(name: string, current: number, target: number) {
+function recommendation(name: string, current: number, target: number, skillType: SkillType = "technical") {
+  if (skillType === "soft") {
+    if (current === 0) return `Take a role where you visibly practise ${name} (own a small initiative, run a meeting, write the design doc), then capture the outcome and a concrete example on your profile.`;
+    return `Move ${name} from level ${current} to ${target}: seek scope with more ambiguity or people, ask for feedback on it explicitly, and record one situation-action-result example you can talk through.`;
+  }
   if (current === 0) return `Build a small, reviewable project that demonstrates ${name}, then add the outcome and evidence to your profile.`;
   return `Deepen ${name} from level ${current} to ${target} through applied practice, feedback, and one production-style example.`;
 }
@@ -144,7 +173,7 @@ export async function runAnalysis(userId: string, roleId: string, experienceLeve
   if (!sourceText) throw new Error("PROFILE_EMPTY");
 
   const requirements = await query<RequirementRow>(
-    `SELECT s.id AS "skillId", s.name, s.category, s.description, s.aliases,
+    `SELECT s.id AS "skillId", s.name, s.category, s.description, s.aliases, s.skill_type AS "skillType",
       r.target_level AS "targetLevel", r.importance, r.weight
      FROM role_skill_requirements r JOIN skills s ON s.id=r.skill_id
      WHERE r.role_id=$1 AND r.experience_level=$2 ORDER BY r.weight DESC, s.name`,
@@ -159,7 +188,10 @@ export async function runAnalysis(userId: string, roleId: string, experienceLeve
   const bySkill = new Map(existing.map((item) => [item.skillId, item]));
 
   const scored: ScoredSkill[] = requirements.map((requirement) => {
-    const inferred = inferSkill(sourceText, [requirement.name, ...requirement.aliases]);
+    const isSoft = requirement.skillType === "soft";
+    const inferred = isSoft
+      ? inferSoftSkill(sourceText, [requirement.name, ...requirement.aliases])
+      : inferSkill(sourceText, [requirement.name, ...requirement.aliases]);
     const saved = bySkill.get(requirement.skillId);
     const currentLevel = saved?.userVerified ? saved.level : Math.max(saved?.level ?? 0, inferred.level);
     const inferredEvidence = inferred.evidence.map((quote) => ({ quote: quote.slice(0, 360), source: resumeText.includes(quote) ? "Resume" : "Profile" }));
@@ -169,8 +201,9 @@ export async function runAnalysis(userId: string, roleId: string, experienceLeve
       id: randomUUID(), skillId: requirement.skillId, name: requirement.name, category: requirement.category,
       description: requirement.description, currentLevel, targetLevel: requirement.targetLevel,
       confidence, importance: requirement.importance, weight: Number(requirement.weight),
+      skillType: requirement.skillType,
       classification: classifySkill(currentLevel, requirement.targetLevel), evidence,
-      recommendation: recommendation(requirement.name, currentLevel, requirement.targetLevel),
+      recommendation: recommendation(requirement.name, currentLevel, requirement.targetLevel, requirement.skillType),
       whyItMatters: requirement.description,
     };
   });
@@ -195,6 +228,7 @@ export async function runAnalysis(userId: string, roleId: string, experienceLeve
           skillId: item.skillId,
           name: item.name,
           category: item.category,
+          skillType: item.skillType,
           classification: item.classification,
           currentLevel: item.currentLevel,
           targetLevel: item.targetLevel,
