@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { runAnalysis } from "@/lib/analyzer";
 import { one } from "@/lib/db";
+import { notifyAnalysisReady } from "@/lib/notifications";
 import { getAnalysisHistory } from "@/lib/reports";
 import { analysisSchema, paginationSchema } from "@/lib/validation";
 
@@ -26,6 +27,9 @@ export async function POST(request: Request) {
     );
     if (recent && !recent.allowed) return fail("RATE_LIMITED", "Please wait a moment before running another analysis.", 429);
     const result = await runAnalysis(user.id, input.roleId, input.experienceLevel, input.resumeId);
+    await notifyAnalysisReady(user.id, result.id).catch((error) => {
+      console.error("Analysis notification failed", error instanceof Error ? error.message : "unknown error");
+    });
     return ok(result, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "PROFILE_EMPTY") return fail("PROFILE_EMPTY", "Add a resume or profile details before analyzing a role.", 422);

@@ -41,6 +41,22 @@ or:
 - `GET /role-comparison?left=:analysisId&right=:analysisId` — compares two owned analyses.
 - `GET /market?roleId=:id&level=junior|mid|senior&region=global` — returns `{ leverage, outlook }`. `leverage` is computed from the seeded catalog (per-skill `roleCount`, `criticalCount`, `leverageIndex` 0–100). `outlook` is `{ connected: false, ... }` until a job-postings source is ingested; when connected it returns latest `signals` and linear `projections` built only from real dated observations. Never returns fabricated demand numbers.
 
+## Course plan
+
+- `GET /learning-paths` — the user's active AI-tailored learning path with modules, or `null`.
+- `POST /learning-paths` — `{ analysisId?, weeklyHours }`; builds a new path from the open gaps of the given (or latest) analysis, archiving any previous active path. `422 NO_GAPS` / `422 ANALYSIS_NOT_FOUND` when there is nothing to plan.
+- `PATCH /learning-paths/modules/:id` — `{ status: "not_started" | "in_progress" | "completed" }`; updates a module owned through the user's path.
+
+## Messaging and notifications
+
+- `GET /integrations` — linked channels, notification toggles, and which providers are configured.
+- `POST /integrations/telegram/link` — issues a one-time link code + `t.me` deep link (30-min TTL).
+- `DELETE /integrations/telegram` — unlink Telegram.
+- `POST /integrations/telegram/webhook` — Telegram update sink; validates `x-telegram-bot-api-secret-token`, links the `chat_id` when it receives a valid code. Not user-facing.
+- `POST /integrations/whatsapp/link` — `501 NOT_IMPLEMENTED` (provider not wired yet).
+- `PATCH /notifications/preferences` — `{ notifyRoadmap?, notifyWeeklyDigest?, notifyAnalysis?, notifyInactivity? }`.
+- `GET|POST /cron/notifications?job=all|roadmap|weekly|inactivity` — batch sender; requires `Authorization: Bearer $CRON_SECRET` (or `?secret=`). Called by Vercel Cron.
+
 ## Roadmaps
 
 - `GET /roadmaps?analysisId=:id` — latest owned roadmap or roadmap for a specific owned analysis.

@@ -45,6 +45,18 @@ Two separated demand signals, neither of which changes a match score:
 1. **In-catalog leverage** — computed only from seeded role/skill data: how many tracked roles need a skill and how often it is critical. Always available.
 2. **Live market outlook** — reads the `market_signals` table, which stays empty until a real job-postings source is ingested with `npm run market:ingest` (implement `fetchObservations()` in `scripts/ingest-market.ts`). With no data Aperio reports "not connected" and shows no numbers. A forecast is a linear projection returned only when two or more real dated observations exist for a skill.
 
+## Course plan (AI-tailored)
+
+`/learning` turns the open gaps in a user's latest analysis into a personalized, week-by-week study plan: per-module objective, 1–8 concrete activities, one hands-on project, and a self-verifiable checkpoint, paced to a chosen weekly-hours budget. Gemini generates it against the grounded gap list (no invented course names, URLs, certifications, or promised outcomes); a deterministic plan is built from the same gaps when Gemini is unavailable. Module progress is tracked but, like the roadmap, is not treated as proof of mastery. Tables: `learning_paths`, `learning_path_modules`.
+
+## Messaging and automated updates
+
+Users can link a channel in **Settings → Connected messaging** and receive automated messages: roadmap reminders, a weekly digest, analysis-ready updates, and an inactivity nudge — each toggle is per-user and off unless a channel is linked.
+
+- **Telegram** is implemented. Create a bot with `@BotFather`, set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, and `TELEGRAM_WEBHOOK_SECRET`, then register the webhook to `POST /api/v1/integrations/telegram/webhook`. Linking uses a one-time code the user sends to the bot; only a Telegram `chat_id` is stored.
+- **WhatsApp** is stubbed — the notification engine already routes by channel `platform`; enabling it means adding a provider (Meta Cloud API or Twilio), implementing the `whatsapp` branch in `lib/notifications.ts`, and a real opt-in flow.
+- Scheduled sends run from `GET /api/v1/cron/notifications?job=all` (Vercel Cron in `vercel.json`, daily) guarded by `CRON_SECRET`. Every send is de-duplicated via `notification_log` (per day / ISO week / window), so a daily cron still yields one weekly digest.
+
 ## Authentication
 
 Aperio uses email/password authentication with bcrypt-hashed passwords and random, SHA-256-hashed session tokens in an HTTP-only cookie. Route handlers call `requireUser()` and every user-owned query includes the authenticated user ID for ownership checks.

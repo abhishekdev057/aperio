@@ -61,6 +61,24 @@ const diagnosticsSchema = z.object({
 
 export type GeminiDiagnostics = z.infer<typeof diagnosticsSchema>;
 
+const learningPathSchema = z.object({
+  title: z.string().min(6).max(160),
+  summary: z.string().min(40).max(1200),
+  totalWeeks: z.number().int().min(2).max(52),
+  modules: z.array(z.object({
+    weekStart: z.number().int().min(1).max(52),
+    weekEnd: z.number().int().min(1).max(52),
+    skillId: z.string().max(100),
+    title: z.string().min(4).max(160),
+    objective: z.string().min(10).max(600),
+    activities: z.array(z.string().min(3).max(280)).min(1).max(8),
+    project: z.string().min(10).max(600),
+    checkpoint: z.string().min(6).max(400),
+  })).min(1).max(24),
+});
+
+export type GeminiLearningPath = z.infer<typeof learningPathSchema>;
+
 const resumeResponseSchema = {
   type: Type.OBJECT,
   required: ["isResume", "documentType", "confidence", "rejectionReason", "candidateName", "professionalHeadline", "summary", "extractedText", "skills", "experience", "education", "projects", "certifications", "visualSignals", "warnings"],
@@ -90,6 +108,22 @@ const resumeResponseSchema = {
     } } },
     visualSignals: { type: Type.ARRAY, items: { type: Type.STRING } },
     warnings: { type: Type.ARRAY, items: { type: Type.STRING } },
+  },
+};
+
+const learningPathResponseSchema = {
+  type: Type.OBJECT,
+  required: ["title", "summary", "totalWeeks", "modules"],
+  properties: {
+    title: { type: Type.STRING },
+    summary: { type: Type.STRING },
+    totalWeeks: { type: Type.INTEGER },
+    modules: { type: Type.ARRAY, items: { type: Type.OBJECT, required: ["weekStart", "weekEnd", "skillId", "title", "objective", "activities", "project", "checkpoint"], properties: {
+      weekStart: { type: Type.INTEGER }, weekEnd: { type: Type.INTEGER }, skillId: { type: Type.STRING },
+      title: { type: Type.STRING }, objective: { type: Type.STRING },
+      activities: { type: Type.ARRAY, items: { type: Type.STRING } },
+      project: { type: Type.STRING }, checkpoint: { type: Type.STRING },
+    } } },
   },
 };
 
@@ -243,4 +277,41 @@ ${JSON.stringify(input)}`;
   });
   const allowedIds = new Set(input.skills.map((skill) => skill.skillId));
   return { ...parsed, skillRecommendations: parsed.skillRecommendations.filter((item) => allowedIds.has(item.skillId)) };
+}
+
+export async function generateLearningPath(input: {
+  roleTitle: string;
+  experienceLevel: ExperienceLevel;
+  weeklyHours: number;
+  overallScore: number;
+  gaps: Array<{ skillId: string; name: string; skillType?: string; classification: string; currentLevel: number; targetLevel: number; importance: Importance }>;
+}) {
+  const prompt = `You are designing ONE student's personalised learning path from the JSON below. Use only these skills and their exact skillId values.
+Rules:
+- Sequence by impact then dependency: foundational and critical gaps first.
+- Budget roughly ${input.weeklyHours} study hours per week. Give bigger gaps (currentLevel far below targetLevel) more weeks; small gaps can share a module or take one week.
+- Every module needs: a concrete objective, 1-8 specific activities (read/build/practise, not course links), one hands-on project, and a measurable checkpoint the student can self-verify.
+- For skillType "soft", activities and the project must be situational (take on scope, run a session, get feedback, write it up) rather than coding tasks.
+- Do NOT invent course names, URLs, certifications, prices, employers, or guaranteed outcomes. No week numbers beyond totalWeeks.
+- totalWeeks must equal the last module's weekEnd.
+
+${JSON.stringify(input)}`;
+  const parsed = await runWithGeminiFallback("learning path", async (ai, model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction: "You are Aperio's learning designer. Output is a study plan grounded in the supplied gaps, never a promise of a result.",
+        maxOutputTokens: 12_000,
+        responseMimeType: "application/json",
+        responseSchema: learningPathResponseSchema,
+      },
+    });
+    return parseModelJson(response.text, learningPathSchema);
+  });
+  const allowedIds = new Set(input.gaps.map((gap) => gap.skillId));
+  const modules = parsed.modules.filter((item) => allowedIds.has(item.skillId));
+  if (!modules.length) throw new Error("GEMINI_EMPTY_LEARNING_PATH");
+  const totalWeeks = Math.max(...modules.map((item) => item.weekEnd));
+  return { ...parsed, modules, totalWeeks };
 }

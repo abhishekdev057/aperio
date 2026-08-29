@@ -42,6 +42,22 @@ export const roadmapItemSchema = z.object({
   status: z.enum(["not_started", "in_progress", "completed"]),
 });
 
+export const notificationPreferencesSchema = z.object({
+  notifyRoadmap: z.boolean().optional(),
+  notifyWeeklyDigest: z.boolean().optional(),
+  notifyAnalysis: z.boolean().optional(),
+  notifyInactivity: z.boolean().optional(),
+});
+
+export const learningPathSchema = z.object({
+  analysisId: idSchema.optional().nullable(),
+  weeklyHours: z.coerce.number().int().min(2).max(40).default(6),
+});
+
+export const learningModuleSchema = z.object({
+  status: z.enum(["not_started", "in_progress", "completed"]),
+});
+
 export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),

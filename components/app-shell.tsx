@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Compass,
   FileSearch,
+  GraduationCap,
   History,
   LogOut,
   Map,
@@ -23,6 +24,7 @@ const nav = [
   { href: "/analyze", label: "Analyze", icon: FileSearch },
   { href: "/skills", label: "Skill Profile", mobileLabel: "Skills", icon: Target },
   { href: "/roadmap", label: "Roadmap", icon: Map },
+  { href: "/learning", label: "Course Plan", mobileLabel: "Course", icon: GraduationCap },
   { href: "/roles", label: "Roles", icon: Compass },
   { href: "/history", label: "History", icon: History },
 ] as const;
