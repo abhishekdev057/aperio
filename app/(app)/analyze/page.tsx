@@ -5,7 +5,6 @@ import { query } from "@/lib/db";
 import { getRoles } from "@/lib/reports";
 
 export const metadata = { title: "Analyze" };
-
 export default async function AnalyzePage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
   const user = await requirePageUser();
   const queryParams = await searchParams;
@@ -20,13 +19,13 @@ export default async function AnalyzePage({ searchParams }: { searchParams: Prom
   ]);
 
   return (
-    <div className="aperio-page">
-      <header className="max-w-3xl">
-        <p className="aperio-eyebrow flex items-center gap-2"><Sparkles size={12} />Evidence intelligence</p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-[-.045em] sm:text-[38px]">Turn your resume into a clear next move.</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">Choose a role, verify your resume, and let Aperio map visible evidence to stored expectations—without guessing what you know.</p>
-      </header>
-      <div className="mt-7"><AnalysisWorkbench roles={roles} initialRoleId={queryParams.role} initialResumes={resumes} /></div>
+    <div className="mx-auto max-w-[1180px] px-5 py-8 lg:px-10 lg:py-10">
+      <div className="max-w-2xl">
+        <div className="inline-flex items-center gap-2 rounded-[8px] border bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[.12em] text-[var(--primary)]"><Sparkles size={13} />Gemini-powered evidence intelligence</div>
+        <h1 className="mt-4 text-3xl font-semibold tracking-[-.04em] sm:text-4xl">Turn your resume into a clear next move.</h1>
+        <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--muted)]">Choose a target role. Aperio verifies your resume, maps visible evidence to stored role requirements, and creates a roadmap grounded in what your profile demonstrates today.</p>
+      </div>
+      <div className="mt-8"><AnalysisWorkbench roles={roles} initialRoleId={queryParams.role} initialResumes={resumes} /></div>
     </div>
   );
 }

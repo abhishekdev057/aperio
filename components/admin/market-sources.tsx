@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, LoaderCircle, Play, Plus, Radar, Trash2 } from "lucide-react";
+import { Check, LoaderCircle, Play, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatRelative } from "@/lib/utils";
@@ -118,9 +118,8 @@ export function MarketSources({ initial }: { initial: { sources: Source[]; integ
   return (
     <div className="space-y-4">
       <div>
-        <p className="aperio-eyebrow text-[var(--primary)]"><Radar size={14} />Market ingestion</p>
-        <h1 className="aperio-page-title mt-3">Job market</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+        <h1 className="text-2xl font-semibold tracking-tight">Job market</h1>
+        <p className="mt-1 max-w-3xl text-sm text-[var(--muted)]">
           Each source below is a real job board Aperio scans. Ingestion does two things: (1) stores the actual openings, which users
           see on their <b className="text-[var(--foreground)]">Jobs</b> page ranked by skill overlap, and (2) counts how often each
           skill appears, which powers the demand outlook on analysis reports. Higher weight = more say in the blended demand index.
@@ -129,7 +128,7 @@ export function MarketSources({ initial }: { initial: { sources: Source[]; integ
         </p>
       </div>
 
-      <section className="relative overflow-hidden rounded-[17px] border bg-[linear-gradient(110deg,var(--primary-faint),var(--surface))] p-5">
+      <section className="rounded-[14px] border bg-[var(--surface)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
             <span><b className="tabular-nums">{Number(t?.totalPostings ?? 0)}</b> <span className="text-[var(--muted)]">postings</span></span>
@@ -151,7 +150,7 @@ export function MarketSources({ initial }: { initial: { sources: Source[]; integ
         ) : null}
       </section>
 
-      <div className="aperio-panel overflow-hidden">
+      <div className="overflow-hidden rounded-[14px] border bg-[var(--surface)]">
         <div className="hidden grid-cols-[1.4fr_.8fr_.7fr_1fr_.6fr_auto] gap-2 border-b bg-[var(--surface-elevated)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] sm:grid">
           <span>Name</span><span>Kind</span><span>Weight</span><span>API creds</span><span>On</span><span />
         </div>

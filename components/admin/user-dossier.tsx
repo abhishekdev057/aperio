@@ -17,7 +17,7 @@ type D = {
 
 function Panel({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
-    <section className="aperio-panel p-4 sm:p-5">
+    <section className="rounded-[14px] border bg-[var(--surface)] p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
         {title}{count !== undefined && <span className="ml-1.5 text-[var(--foreground)]">{count}</span>}
       </p>
@@ -32,32 +32,29 @@ export function UserDossier({ data }: { data: D }) {
     <div className="space-y-5">
       <Link href="/admin/users" className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--muted)] hover:text-[var(--foreground)]"><ArrowLeft size={13} />Users</Link>
 
-      <div className="relative overflow-hidden rounded-[19px] border border-[#2a3a68] bg-[#0a1625] p-5 text-white sm:p-6">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_0%,rgba(99,102,241,.38),transparent_40%)]" />
-        <div className="relative">
+      <div className="rounded-[16px] border bg-[var(--surface)] p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
               {String(u.fullName)}
-              {u.role === "admin" && <span className="rounded bg-indigo-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-200">admin</span>}
+              {u.role === "admin" && <span className="rounded bg-[var(--primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--primary)]">admin</span>}
             </h1>
-            <p className="mt-1 text-sm text-slate-400">{String(u.email)} · {String(u.authProvider ?? "password")}</p>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-1 text-sm text-[var(--muted)]">{String(u.email)} · {String(u.authProvider ?? "password")}</p>
+            <p className="mt-2 text-xs text-[var(--muted)]">
               Joined {formatDate(String(u.createdAt))} · Last seen {u.lastSeenAt ? formatRelative(String(u.lastSeenAt)) : "—"}
             </p>
           </div>
-          <div className="text-right text-xs text-slate-400">
-            {u.targetRoleTitle ? <p>Target: <b className="text-white">{String(u.targetRoleTitle)}</b> · {String(u.targetLevel ?? "")}</p> : <p>No target role</p>}
+          <div className="text-right text-xs text-[var(--muted)]">
+            {u.targetRoleTitle ? <p>Target: <b className="text-[var(--foreground)]">{String(u.targetRoleTitle)}</b> · {String(u.targetLevel ?? "")}</p> : <p>No target role</p>}
             <p className="mt-1">Onboarded: {u.onboardingCompleted ? "yes" : "no"}</p>
           </div>
         </div>
         {Boolean(u.headline || u.bio) && (
-          <div className="mt-3 border-t border-white/10 pt-3 text-sm text-slate-300">
+          <div className="mt-3 border-t pt-3 text-sm text-[var(--muted-strong)]">
             {u.headline ? <p className="font-medium">{String(u.headline)}</p> : null}
-            {u.bio ? <p className="mt-1 text-xs leading-5 text-slate-400">{String(u.bio)}</p> : null}
+            {u.bio ? <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{String(u.bio)}</p> : null}
           </div>
         )}
-        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

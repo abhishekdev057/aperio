@@ -79,9 +79,7 @@ export function AssessmentRunner({ assessment }: { assessment: Assessment }) {
   if (done && summary) {
     return (
       <div className="mx-auto max-w-2xl">
-        <div className="aperio-panel relative overflow-hidden p-7 text-center">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--positive)_15%,transparent),transparent_45%)]" />
-          <div className="relative">
+        <div className="rounded-[20px] border bg-[var(--surface)] p-7 text-center">
           <span className="mx-auto grid size-14 place-items-center rounded-[16px] bg-[var(--positive-soft)] text-[var(--positive)]"><ShieldCheck size={24} /></span>
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">Skills check complete</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">Overall {summary.score}% · your verified levels now feed the score and recommendations.</p>
@@ -100,7 +98,6 @@ export function AssessmentRunner({ assessment }: { assessment: Assessment }) {
             <Button asChild variant="secondary"><Link href="/learning">Course plan</Link></Button>
             <Button asChild variant="ghost"><Link href="/practice">Practice</Link></Button>
           </div>
-          </div>
         </div>
       </div>
     );
@@ -108,15 +105,13 @@ export function AssessmentRunner({ assessment }: { assessment: Assessment }) {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="relative overflow-hidden rounded-[20px] border border-[#2b3d72] bg-[#111c43] p-5 text-white shadow-[0_20px_56px_rgba(24,35,85,.18)] sm:p-6">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_0%,rgba(109,93,252,.45),transparent_42%)]" />
-        <div className="relative"><p className="text-xs font-semibold uppercase tracking-[.14em] text-indigo-200">Optional skills check</p>
-        <h1 className="mt-2 text-xl font-semibold tracking-tight">{assessment.roleTitle ?? "Your skills"} — quick verification</h1>
-        <p className="mt-2 text-sm leading-6 text-indigo-100/80">{total} questions. Verified answers can outweigh résumé inference for the skills being checked.</p>
-        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-indigo-300 transition-all" style={{ width: `${(answered / total) * 100}%` }} />
+      <div className="rounded-[16px] border bg-[var(--surface)] p-5">
+        <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--primary)]">Optional skills check</p>
+        <h1 className="mt-1.5 text-xl font-semibold tracking-tight">{assessment.roleTitle ?? "Your skills"} — quick verification</h1>
+        <p className="mt-1.5 text-sm text-[var(--muted)]">{total} questions. Your answers set a verified level for each skill, which the analyzer trusts above résumé inference.</p>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+          <div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${(answered / total) * 100}%` }} />
         </div>
-        <p className="mt-2 text-right text-[10px] text-indigo-200">{answered}/{total} answered</p></div>
       </div>
 
       <div className="mt-4 space-y-4">
@@ -125,7 +120,7 @@ export function AssessmentRunner({ assessment }: { assessment: Assessment }) {
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{skillName}</p>
             <div className="space-y-3">
               {questions.map((q) => (
-                <fieldset key={q.id} className="aperio-panel p-4 transition hover:border-[var(--border-strong)]">
+                <fieldset key={q.id} className="rounded-[14px] border bg-[var(--surface)] p-4">
                   <legend className="mb-2 text-sm font-medium">{q.prompt}</legend>
                   <div className="space-y-1.5">
                     {q.options.map((opt, i) => {

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, FileSearch, Gauge, Sparkles, Target } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, FileSearch, Gauge, Layers3, Sparkles, Target } from "lucide-react";
 import { OverviewDashboard } from "@/components/overview-dashboard";
 import { Button } from "@/components/ui/button";
 import { requirePageUser } from "@/lib/auth";
@@ -21,11 +21,14 @@ export default async function OverviewPage() {
     <div className="aperio-page">
       <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="aperio-eyebrow">Career readiness</p>
+          <p className="aperio-eyebrow">Career readiness overview</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-[-.04em] sm:text-[30px]">Welcome back, {firstName}.</h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">{report ? "Your current evidence, important gaps, and next best move—together." : "Build your evidence profile to understand your strongest next career move."}</p>
+          <p className="mt-2 text-sm text-[var(--muted)]">{report ? "Here’s what your current evidence says—and what to focus on next." : "Build your evidence profile to understand your strongest next career move."}</p>
         </div>
-        <Button asChild><Link href={report ? `/analyze?role=${report.roleId}` : "/analyze"}><Sparkles size={15} />{report ? "Re-analyze profile" : "Start analysis"}</Link></Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {report && <><Link href={`/analyze?role=${report.roleId}`} className="inline-flex h-10 min-w-0 items-center gap-2 rounded-[10px] border bg-[var(--surface)] px-3 text-xs font-semibold transition hover:border-[var(--border-strong)]"><BriefcaseBusiness size={14} className="text-[var(--primary)]" /><span className="max-w-44 truncate">{report.roleTitle}</span></Link><span className="inline-flex h-10 items-center gap-2 rounded-[10px] border bg-[var(--surface)] px-3 text-xs font-semibold capitalize"><Layers3 size={14} className="text-[var(--muted)]" />{report.experienceLevel} level</span></>}
+          <Button asChild><Link href={report ? `/analyze?role=${report.roleId}` : "/analyze"}><Sparkles size={15} />{report ? "Re-analyze" : "Start analysis"}</Link></Button>
+        </div>
       </header>
 
       <div className="mt-7">

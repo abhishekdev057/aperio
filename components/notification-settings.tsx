@@ -90,7 +90,7 @@ export function NotificationSettings({ initial }: { initial: IntegrationsState }
     const active = link?.platform === platform;
 
     return (
-      <section key={platform} className="aperio-panel p-5 transition hover:border-[var(--border-strong)]">
+      <section key={platform} className="rounded-[16px] border bg-[var(--surface)] p-5">
         <div className="flex items-start gap-3">
           <span className="grid size-10 place-items-center rounded-[11px] bg-[var(--primary-soft)] text-[var(--primary)]"><Icon size={18} /></span>
           <div className="min-w-0 flex-1">
@@ -137,7 +137,7 @@ export function NotificationSettings({ initial }: { initial: IntegrationsState }
 
   return (
     <div className="space-y-4">
-      <section className="aperio-panel p-5 transition hover:border-[var(--border-strong)]">
+      <section className="rounded-[16px] border bg-[var(--surface)] p-5">
         <div className="flex items-start gap-3">
           <span className="grid size-10 place-items-center rounded-[11px] bg-[var(--primary-soft)] text-[var(--primary)]"><Mail size={18} /></span>
           <div className="min-w-0 flex-1">
@@ -160,7 +160,7 @@ export function NotificationSettings({ initial }: { initial: IntegrationsState }
       {renderChannel("telegram")}
       {renderChannel("whatsapp")}
 
-      <section className="aperio-panel p-5">
+      <section className="rounded-[16px] border bg-[var(--surface)] p-5">
         <div className="flex items-center gap-2">
           <Bell size={15} className="text-[var(--primary)]" />
           <h2 className="text-sm font-semibold">What to send</h2>

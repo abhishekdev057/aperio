@@ -124,7 +124,7 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
         </div>
       )}
 
-      <div className="relative overflow-hidden rounded-[17px] border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-[var(--primary-soft)] p-5">
+      <div className="rounded-[16px] border border-[var(--primary)]/30 bg-[var(--primary-soft)]/40 p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium">Topic</span>
             <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. React rendering & reconciliation" />
@@ -168,7 +168,7 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
       {Object.entries(byNiche).map(([n, rows]) => (
         <section key={n}>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{n} · {rows.length}</h2>
-          <div className="aperio-panel overflow-hidden">
+          <div className="overflow-hidden rounded-[14px] border bg-[var(--surface)]">
             {rows.map((s) => {
               const id = String(s.id);
               const open = openId === id;

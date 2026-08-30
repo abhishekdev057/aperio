@@ -330,10 +330,9 @@ export function IntegrationForms({ integrations, encryptionReady }: { integratio
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="aperio-eyebrow text-[var(--primary)]"><Plug size={14} />Infrastructure connections</p>
-        <h1 className="aperio-page-title mt-3">Integrations</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">Configure external providers without exposing secrets in the UI. Saved credentials are encrypted in the database with the server encryption key.</p>
+      <div className="mb-4">
+        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">Credentials are encrypted with APP_ENCRYPTION_KEY and stored in the database — not in environment files.</p>
       </div>
 
       {!encryptionReady && (
@@ -343,7 +342,7 @@ export function IntegrationForms({ integrations, encryptionReady }: { integratio
       )}
 
       <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <nav className="aperio-panel flex gap-1 overflow-x-auto p-2 lg:flex-col lg:overflow-visible">
+        <nav className="flex gap-1 overflow-x-auto rounded-[14px] border bg-[var(--surface)] p-2 lg:flex-col lg:overflow-visible">
           {integrations.map((i) => {
             const configured = Object.values(i.secrets).some((s) => s.set) || Object.values(i.config).some(Boolean);
             return (
@@ -362,7 +361,7 @@ export function IntegrationForms({ integrations, encryptionReady }: { integratio
           })}
         </nav>
 
-        <section className="aperio-panel p-5 sm:p-6">
+        <section className="rounded-[16px] border bg-[var(--surface)] p-5">
           {current && (current.schema.ui === "telegram-userbot"
             ? <UserbotPanel key={current.key} integration={current} />
             : <GenericPanel key={current.key} integration={current} origin={origin} />)}

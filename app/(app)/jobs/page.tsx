@@ -8,7 +8,7 @@ export default async function JobsPage() {
   const user = await requirePageUser();
   const initial = await getJobsForUser(user.id, { scope: "all", limit: 24 });
   return (
-    <div className="aperio-page mx-auto max-w-[1180px]">
+    <div className="mx-auto max-w-[1000px] px-5 py-8 lg:px-10 lg:py-10">
       <JobsBoard initial={initial as never} />
     </div>
   );
