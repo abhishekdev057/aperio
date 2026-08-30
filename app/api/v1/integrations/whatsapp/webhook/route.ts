@@ -108,7 +108,14 @@ async function handleInbound(msg: WaMessage, nameByWaId: Map<string | undefined,
 
   // Poll / quick-reply answer.
   if (msg.type === "interactive") {
+    const replyId = msg.interactive?.button_reply?.id ?? msg.interactive?.list_reply?.id ?? "";
     const choice = msg.interactive?.button_reply?.title ?? msg.interactive?.list_reply?.title ?? "";
+    if (replyId && /^(qset|qopt):\d+$/.test(replyId)) {
+      await recordMessage({ threadId, direction: "in", externalId: msg.id ?? null, kind: "text", text: `Chose: ${choice}`, senderName: displayName, status: "delivered" });
+      const { handleQuizInteractive } = await import("@/lib/chat-quiz");
+      after(() => handleQuizInteractive(threadId, "whatsapp", from, replyId));
+      return;
+    }
     if (choice) {
       await recordMessage({ threadId, direction: "in", externalId: msg.id ?? null, kind: "text", text: `Voted: ${choice}`, senderName: displayName, status: "delivered" });
       await recordPollVote(threadId, from, choice);
@@ -140,7 +147,12 @@ async function handleInbound(msg: WaMessage, nameByWaId: Map<string | undefined,
   if (!code) {
     if (saved && kind === "text" && bodyText) {
       const t = bodyText;
-      after(() => maybeAutoReply(threadId, t));
+      after(async () => {
+        const { maybeHandleQuiz } = await import("@/lib/chat-quiz");
+        const rows = await query<{ userId: string | null }>(`SELECT user_id AS "userId" FROM chat_threads WHERE id=$1`, [threadId]);
+        if (await maybeHandleQuiz(threadId, t, "whatsapp", from, rows[0]?.userId ?? null)) return;
+        await maybeAutoReply(threadId, t);
+      });
     }
     return;
   }

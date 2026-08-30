@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { getIntegrationRuntime, setRawSecrets, type IntegrationKey } from "@/lib/settings";
-import { query } from "@/lib/db";
+import { one, query } from "@/lib/db";
 import { parseLinkCode } from "@/lib/telegram";
 import {
   MAX_MEDIA_BYTES,
@@ -340,7 +340,15 @@ export async function syncUserbotMessages(perDialog = 25, maxDialogs = 40, opts:
 
     if (replyQueue.length) {
       const { maybeAutoReply } = await import("@/lib/assistant");
-      for (const item of replyQueue) await maybeAutoReply(item.threadId, item.text);
+      const { maybeHandleQuiz } = await import("@/lib/chat-quiz");
+      for (const item of replyQueue) {
+        const t = await one<{ peerId: string; userId: string | null }>(
+          `SELECT peer_id AS "peerId", user_id AS "userId" FROM chat_threads WHERE id=$1`,
+          [item.threadId],
+        );
+        if (t && (await maybeHandleQuiz(item.threadId, item.text, "telegram_userbot", t.peerId, t.userId))) continue;
+        await maybeAutoReply(item.threadId, item.text);
+      }
     }
     await query(`UPDATE chat_sync_state SET running=false, detail=$1, synced_at=now() WHERE channel='telegram_userbot'`, [`ok, ${stored} new`]);
     return { stored };

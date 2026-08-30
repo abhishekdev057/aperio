@@ -12,6 +12,11 @@ interface Update extends TelegramUpdate {
   poll_answer?: { poll_id?: string; user?: { id?: number; username?: string }; option_ids?: number[] };
 }
 
+async function threadUserId(threadId: string) {
+  const rows = await query<{ userId: string | null }>(`SELECT user_id AS "userId" FROM chat_threads WHERE id=$1`, [threadId]);
+  return rows[0]?.userId ?? null;
+}
+
 // Telegram expects a fast 200 for every update; we always return ok:true.
 export async function POST(request: Request) {
   const ok = () => NextResponse.json({ ok: true });
@@ -33,6 +38,20 @@ export async function POST(request: Request) {
   if (update.poll_answer?.poll_id) {
     const voter = String(update.poll_answer.user?.username ? `@${update.poll_answer.user.username}` : update.poll_answer.user?.id ?? "user");
     const optionIndex = update.poll_answer.option_ids?.[0];
+
+    // Conversational practice quiz owns this poll?
+    if (typeof optionIndex === "number") {
+      const owned = await query<{ id: string }>(`SELECT id FROM chat_quiz_sessions WHERE pending_ref=$1 LIMIT 1`, [update.poll_answer.poll_id]);
+      if (owned[0]) {
+        const pid = update.poll_answer.poll_id;
+        after(async () => {
+          const { handleQuizPollAnswer } = await import("@/lib/chat-quiz");
+          await handleQuizPollAnswer(pid, optionIndex);
+        });
+        return ok();
+      }
+    }
+
     const poll = await query<{ id: string; threadId: string; options: string[] }>(
       `SELECT id, thread_id AS "threadId", options FROM chat_polls WHERE external_id=$1 LIMIT 1`,
       [update.poll_answer.poll_id],
@@ -68,7 +87,12 @@ export async function POST(request: Request) {
     // keep the function alive until it finishes (bare `void` gets frozen).
     if (saved && message.text) {
       const t = message.text;
-      after(() => maybeAutoReply(threadId, t));
+      after(async () => {
+        const { maybeHandleQuiz } = await import("@/lib/chat-quiz");
+        const uid = await threadUserId(threadId);
+        if (await maybeHandleQuiz(threadId, t, "telegram_bot", chatIdStr, uid)) return;
+        await maybeAutoReply(threadId, t);
+      });
     }
     return ok();
   }

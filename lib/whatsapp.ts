@@ -172,3 +172,43 @@ export async function sendWhatsAppPoll(to: string, question: string, options: st
   if (!res.ok) throw new Error(waFailure("WHATSAPP_POLL_FAILED", json?.error, res.status));
   return json.messages?.[0]?.id ?? null;
 }
+
+/**
+ * A tappable single-choice list (used by the conversational practice quiz).
+ * Each row carries a stable `id` we read back from `interactive.list_reply.id`.
+ */
+export async function sendWhatsAppChoiceList(
+  to: string,
+  header: string,
+  bodyText: string,
+  rows: Array<{ id: string; title: string; description?: string }>,
+  buttonLabel = "Choose",
+) {
+  const cfg = await getWhatsAppConfig();
+  if (!cfg.configured) throw new Error("WHATSAPP_NOT_CONFIGURED");
+  const interactive = {
+    type: "list",
+    header: header ? { type: "text", text: header.slice(0, 60) } : undefined,
+    body: { text: bodyText.slice(0, 1024) },
+    action: {
+      button: buttonLabel.slice(0, 20),
+      sections: [
+        {
+          rows: rows.slice(0, 10).map((r) => ({
+            id: r.id.slice(0, 200),
+            title: r.title.slice(0, 24),
+            ...(r.description ? { description: r.description.slice(0, 72) } : {}),
+          })),
+        },
+      ],
+    },
+  };
+  const res = await fetch(`${GRAPH}/${cfg.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${cfg.accessToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", to: to.replace(/[^\d]/g, ""), type: "interactive", interactive }),
+  });
+  const json = (await res.json().catch(() => ({}))) as { error?: WaError; messages?: Array<{ id?: string }> };
+  if (!res.ok) throw new Error(waFailure("WHATSAPP_LIST_FAILED", json?.error, res.status));
+  return json.messages?.[0]?.id ?? null;
+}
