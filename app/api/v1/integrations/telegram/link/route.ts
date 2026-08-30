@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { query } from "@/lib/db";
 import { newLinkCode } from "@/lib/notifications";
-import { getTelegramConfig } from "@/lib/telegram";
+import { getTelegramConfig, linkCodeMessage } from "@/lib/telegram";
 import { userbotStatus } from "@/lib/telegram-userbot";
 
 export const runtime = "nodejs";
@@ -33,15 +33,24 @@ export async function POST() {
     );
 
     const handle = useUserbot ? userbot.username : telegram.botUsername;
+    const message = linkCodeMessage(code);
+    // Bot deep-links use /start=<code> (no spaces allowed); the user bot gets
+    // the friendly prefilled text.
+    const deepLink = handle
+      ? useUserbot
+        ? `https://t.me/${handle}?text=${encodeURIComponent(message)}`
+        : `https://t.me/${handle}?start=${code}`
+      : null;
     return ok({
       code,
+      message,
       expiresAt,
       via: useUserbot ? "userbot" : "bot",
       botUsername: handle,
-      deepLink: handle ? `https://t.me/${handle}?${useUserbot ? "text" : "start"}=${code}` : null,
+      deepLink,
       instructions: handle
-        ? `Open the link, or send "${code}" to @${handle} on Telegram.${useUserbot ? " Linking can take a few seconds." : ""}`
-        : `Send "${code}" to the Aperio Telegram account.`,
+        ? `Open the link, or send this message to @${handle} on Telegram:\n\n${message}${useUserbot ? "\n\nLinking can take a few seconds." : ""}`
+        : `Send this message to the Aperio Telegram account:\n\n${message}`,
     });
   } catch (error) {
     return handleApiError(error);

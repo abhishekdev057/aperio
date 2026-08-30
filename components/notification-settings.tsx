@@ -24,7 +24,7 @@ const meta: Record<Platform, { label: string; icon: typeof Send; missing: string
 export function NotificationSettings({ initial }: { initial: IntegrationsState }) {
   const [data, setData] = useState<IntegrationsState>(initial);
   const [busy, setBusy] = useState("");
-  const [link, setLink] = useState<{ platform: Platform; code: string; deepLink: string | null; instructions: string } | null>(null);
+  const [link, setLink] = useState<{ platform: Platform; code: string; message: string; deepLink: string | null; instructions: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,7 +45,13 @@ export function NotificationSettings({ initial }: { initial: IntegrationsState }
       const res = await fetch(`/api/v1/integrations/${platform}/link`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error?.message || "Could not start linking.");
-      setLink({ platform, code: json.data.code, deepLink: json.data.deepLink, instructions: json.data.instructions });
+      setLink({
+        platform,
+        code: json.data.code,
+        message: json.data.message ?? `Link my Aperio account: ${json.data.code}`,
+        deepLink: json.data.deepLink,
+        instructions: json.data.instructions,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start linking.");
     } finally {
@@ -102,17 +108,17 @@ export function NotificationSettings({ initial }: { initial: IntegrationsState }
               <p className="mt-3 rounded-[10px] bg-[var(--attention-soft)] px-3 py-2 text-xs text-[var(--muted-strong)]">{missing}</p>
             ) : active ? (
               <div className="mt-3 rounded-[12px] border bg-[var(--surface-elevated)] p-4">
-                <p className="text-xs text-[var(--muted)]">Your one-time link code</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <code className="rounded-md bg-[var(--surface)] px-2 py-1 text-base font-bold tracking-[.2em]">{link!.code}</code>
+                <p className="text-xs text-[var(--muted)]">Send this message to {label} (the code inside is verified automatically)</p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-sm font-semibold">{link!.message}</code>
                   <button
-                    onClick={() => { navigator.clipboard?.writeText(link!.code); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)]"
+                    onClick={() => { navigator.clipboard?.writeText(link!.message); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+                    className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--primary)]"
                   >
                     {copied ? <Check size={13} /> : <Copy size={13} />}{copied ? "Copied" : "Copy"}
                   </button>
                 </div>
-                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{link!.instructions}</p>
+                <p className="mt-2 whitespace-pre-line text-xs leading-5 text-[var(--muted)]">{link!.instructions}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {link!.deepLink && <Button asChild size="sm"><a href={link!.deepLink} target="_blank" rel="noreferrer"><Icon size={14} />Open {label}</a></Button>}
                   <Button size="sm" variant="secondary" onClick={refresh}>Sent it &mdash; refresh</Button>

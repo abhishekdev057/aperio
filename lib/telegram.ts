@@ -99,12 +99,43 @@ export interface TelegramUpdate {
   };
 }
 
-/** Pull a link code out of "/start CODE", "/start=CODE", or a bare code message. */
+// Aperio link codes: 8 chars from an unambiguous alphabet (no 0/O/1/I).
+const CODE_CHARS = "A-HJ-NP-Z2-9";
+const CODE_RE = new RegExp(`[${CODE_CHARS}]{8}`, "i");
+
+/**
+ * Pull a link code out of:
+ *  - "/start CODE" / "/start=CODE"
+ *  - a friendly sentence like "Link my Aperio account: CODE"
+ *  - a bare code message
+ */
 export function parseLinkCode(text: string | undefined) {
   if (!text) return null;
   const trimmed = text.trim();
+
   const startMatch = trimmed.match(/^\/start(?:[=\s]+(.+))?$/i);
-  const candidate = startMatch ? (startMatch[1] ?? "").trim() : trimmed;
-  const code = candidate.replace(/[^A-Za-z0-9]/g, "");
-  return code.length >= 6 && code.length <= 24 ? code.toUpperCase() : null;
+  if (startMatch) {
+    const code = (startMatch[1] ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+    return code.length >= 6 && code.length <= 24 ? code : null;
+  }
+
+  // "...link / account / code / aperio ... <CODE>"
+  const phrase = trimmed.match(new RegExp(`(?:link|account|code|aperio)[^A-Za-z0-9]*([${CODE_CHARS}]{8})\\b`, "i"));
+  if (phrase) return phrase[1].toUpperCase();
+
+  // Bare code, possibly with surrounding punctuation/quotes.
+  const bare = trimmed.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (bare.length >= 6 && bare.length <= 24 && new RegExp(`^[${CODE_CHARS}]+$`, "i").test(bare)) return bare;
+
+  // Fallback: a lone code-shaped token anywhere (e.g. wrapped in a longer line).
+  if (!/\s/.test(trimmed)) {
+    const m = trimmed.toUpperCase().match(CODE_RE);
+    if (m) return m[0];
+  }
+  return null;
+}
+
+/** The message we ask a user to send so linking reads nicely in the chat. */
+export function linkCodeMessage(code: string) {
+  return `Link my Aperio account: ${code}`;
 }

@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { query } from "@/lib/db";
 import { newLinkCode } from "@/lib/notifications";
+import { linkCodeMessage } from "@/lib/telegram";
 import { getWhatsAppConfig } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
@@ -26,14 +27,16 @@ export async function POST() {
          address=NULL, verified_at=NULL, updated_at=now()`,
       [randomUUID(), user.id, code, expiresAt],
     );
-    const deepLink = cfg.businessNumber ? `https://wa.me/${cfg.businessNumber}?text=${encodeURIComponent(code)}` : null;
+    const message = linkCodeMessage(code);
+    const deepLink = cfg.businessNumber ? `https://wa.me/${cfg.businessNumber}?text=${encodeURIComponent(message)}` : null;
     return ok({
       code,
+      message,
       expiresAt,
       deepLink,
       instructions: cfg.businessNumber
-        ? `Open the link and send the code to +${cfg.businessNumber}, or message that number with "${code}".`
-        : `Message the Aperio WhatsApp number with the code "${code}".`,
+        ? `Open the link, or message +${cfg.businessNumber} on WhatsApp with:\n\n${message}`
+        : `Message the Aperio WhatsApp number with:\n\n${message}`,
     });
   } catch (error) {
     return handleApiError(error);
