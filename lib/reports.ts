@@ -2,16 +2,31 @@ import { one, query } from "@/lib/db";
 import type { AnalysisReport, AnalysisSkill, RoleSummary } from "@/lib/types";
 
 export async function getRoles(userId?: string) {
-  const rows = await query<RoleSummary & { estimatedMatch: number | null; lastAnalyzedAt: string | null } & Record<string, unknown>>(
+  const rows = await query<RoleSummary & { estimatedMatch: number | null; lastAnalyzedAt: string | null; skillFamilies: string[]; requirementCount: number } & Record<string, unknown>>(
     userId
       ? `SELECT r.id,r.slug,r.title,r.description,r.category,
-          latest.overall_score AS "estimatedMatch", latest.created_at AS "lastAnalyzedAt"
+          latest.overall_score AS "estimatedMatch", latest.created_at AS "lastAnalyzedAt",
+          ARRAY(
+            SELECT DISTINCT s.category FROM role_skill_requirements rsr
+            JOIN skills s ON s.id=rsr.skill_id
+            WHERE rsr.role_id=r.id AND rsr.experience_level='mid' AND COALESCE(s.skill_type,'technical')='technical'
+            ORDER BY s.category LIMIT 4
+          ) AS "skillFamilies",
+          (SELECT COUNT(DISTINCT rsr.skill_id)::integer FROM role_skill_requirements rsr WHERE rsr.role_id=r.id AND rsr.experience_level='mid') AS "requirementCount"
          FROM roles r
          LEFT JOIN LATERAL (
            SELECT overall_score,created_at FROM analyses a WHERE a.role_id=r.id AND a.user_id=$1 ORDER BY created_at DESC LIMIT 1
          ) latest ON true
          WHERE r.active=true ORDER BY r.title`
-      : `SELECT id,slug,title,description,category,NULL::integer AS "estimatedMatch",NULL::timestamptz AS "lastAnalyzedAt" FROM roles WHERE active=true ORDER BY title`,
+      : `SELECT r.id,r.slug,r.title,r.description,r.category,NULL::integer AS "estimatedMatch",NULL::timestamptz AS "lastAnalyzedAt",
+          ARRAY(
+            SELECT DISTINCT s.category FROM role_skill_requirements rsr
+            JOIN skills s ON s.id=rsr.skill_id
+            WHERE rsr.role_id=r.id AND rsr.experience_level='mid' AND COALESCE(s.skill_type,'technical')='technical'
+            ORDER BY s.category LIMIT 4
+          ) AS "skillFamilies",
+          (SELECT COUNT(DISTINCT rsr.skill_id)::integer FROM role_skill_requirements rsr WHERE rsr.role_id=r.id AND rsr.experience_level='mid') AS "requirementCount"
+         FROM roles r WHERE r.active=true ORDER BY r.title`,
     userId ? [userId] : [],
   );
   return rows;

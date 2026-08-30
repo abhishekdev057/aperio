@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, BarChart3, Check, CheckCheck, Download, LoaderCircle, Maximize2, MessageCircle, Paperclip, Play, Plus, Search, Send, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, BarChart3, Check, CheckCheck, Download, LoaderCircle, Maximize2, MessageCircle, MessagesSquare, Paperclip, Play, Plus, Search, Send, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -314,9 +314,9 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col">
-      <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Chat workspace</h1>
+    <div className="flex h-[calc(100dvh-10rem)] min-h-[560px] flex-col lg:h-[calc(100vh-8rem)]">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div><p className="aperio-eyebrow text-[var(--primary)]"><MessagesSquare size={14} />Omnichannel support</p><h1 className="aperio-page-title mt-3">Chat workspace</h1><p className="mt-1 text-xs text-[var(--muted)]">Telegram and WhatsApp conversations in one operational inbox.</p></div>
         <div className="flex gap-1 rounded-[10px] border bg-[var(--surface)] p-1 text-xs font-medium">
           {(["all", "telegram", "whatsapp"] as const).map((c) => (
             <button key={c} onClick={() => setChannel(c)} className={cn("rounded-[7px] px-2.5 py-1", channel === c ? "bg-[var(--primary-soft)] text-[var(--primary-strong)]" : "text-[var(--muted)]")}>
@@ -334,9 +334,9 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
         </p>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)] overflow-hidden rounded-[16px] border bg-[var(--surface)]">
+      <div className="aperio-panel grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[300px_minmax(0,1fr)]">
         {/* thread list */}
-        <div className="flex min-h-0 flex-col border-r">
+        <div className={cn("min-h-0 flex-col border-r", activeId ? "hidden md:flex" : "flex")}>
           <div className="flex items-center gap-1.5 border-b p-2">
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
@@ -420,10 +420,11 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
         </div>
 
         {/* conversation */}
-        <div className="flex min-h-0 flex-col">
+        <div className={cn("min-h-0 flex-col", activeId ? "flex" : "hidden md:flex")}>
           {active ? (
             <>
-              <div className="flex items-center gap-2 border-b px-4 py-2.5">
+              <div className="flex items-center gap-2 border-b px-3 py-2.5 sm:px-4">
+                <button onClick={() => setActiveId(null)} className="grid size-8 place-items-center rounded-[8px] text-[var(--muted)] hover:bg-[var(--surface-muted)] md:hidden" aria-label="Back to conversations"><ArrowLeft size={15} /></button>
                 <span className="size-2 rounded-full" style={{ background: channelDot[active.channel] }} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{active.peerName || active.userName || active.peerId}</p>

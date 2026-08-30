@@ -83,7 +83,9 @@ export function LearningPathView({ initialPath }: { initialPath: Path | null }) 
 
   if (!path) {
     return (
-      <div className="rounded-[20px] border bg-[var(--surface)] px-6 py-14 text-center">
+      <div className="aperio-panel relative overflow-hidden px-6 py-14 text-center">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--primary)_14%,transparent),transparent_52%)]" />
+        <div className="relative">
         <span className="mx-auto grid size-12 place-items-center rounded-[14px] bg-[var(--primary-soft)] text-[var(--primary)]"><GraduationCap size={21} /></span>
         <h2 className="mt-5 text-lg font-semibold">Build your tailored course</h2>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
@@ -98,6 +100,7 @@ export function LearningPathView({ initialPath }: { initialPath: Path | null }) 
         </div>
         <p className="mt-4 text-[11px] text-[var(--muted)]">Needs at least one analysis with open gaps. No course links or promised outcomes — a study plan grounded in your evidence.</p>
         {error && <p role="alert" className="mt-4 text-sm text-[var(--critical)]">{error}</p>}
+        </div>
       </div>
     );
   }
@@ -106,13 +109,15 @@ export function LearningPathView({ initialPath }: { initialPath: Path | null }) 
 
   return (
     <div>
-      <section className="rounded-[20px] border bg-[var(--surface)] p-6 sm:p-7">
+      <section className="relative overflow-hidden rounded-[22px] border border-[#2b3c70] bg-[#111c43] p-6 text-white shadow-[0_24px_64px_rgba(24,35,85,.2)] sm:p-7">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_84%_10%,rgba(109,93,252,.45),transparent_38%),linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px)] bg-[size:auto,auto_36px]" />
+        <div className="relative">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.14em] text-[var(--muted)]"><Target size={14} />{path.roleTitle ?? "Career"} · {path.totalWeeks} weeks · {path.weeklyHours}h/wk</div>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.14em] text-indigo-200"><Target size={14} />{path.roleTitle ?? "Career"} · {path.totalWeeks} weeks · {path.weeklyHours}h/wk</div>
             <h2 className="mb-0 mt-3 text-xl font-semibold tracking-[-.03em]">{path.title}</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">{path.summary}</p>
-            <p className="mt-3 text-[11px] text-[var(--muted)]">{done}/{path.modules.length} modules done · {path.generator === "gemini" ? "Personalised by Aperio AI" : "Structured plan"}</p>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-indigo-100/80">{path.summary}</p>
+            <p className="mt-3 text-[11px] text-indigo-200">{done}/{path.modules.length} modules done · {path.generator === "gemini" ? "Personalised by Aperio AI" : "Structured plan"}</p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
             {hoursPicker}
@@ -121,18 +126,20 @@ export function LearningPathView({ initialPath }: { initialPath: Path | null }) 
             </Button>
           </div>
         </div>
+        <div className="relative mt-6 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${path.modules.length ? (done / path.modules.length) * 100 : 0}%` }} /></div>
+        </div>
       </section>
 
       {error && <p role="alert" className="mt-4 text-sm text-[var(--critical)]">{error}</p>}
 
-      <div className="mt-5 space-y-3">
+      <div className="relative mt-5 space-y-3 before:absolute before:bottom-8 before:left-[35px] before:top-8 before:w-px before:bg-[var(--border-strong)]">
         {path.modules.map((module) => (
-          <article key={module.id} className="rounded-[16px] border bg-[var(--surface)] p-5">
+          <article key={module.id} className="aperio-panel relative p-5 transition hover:border-[var(--border-strong)]">
             <div className="flex items-start gap-4">
               <button
                 onClick={() => cycle(module)}
                 className={cn(
-                  "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full",
+                  "relative z-10 mt-0.5 grid size-8 shrink-0 place-items-center rounded-full",
                   module.status === "completed" ? "bg-[var(--positive)] text-white" : module.status === "in_progress" ? "bg-[var(--primary-soft)] text-[var(--primary)]" : "border text-[var(--muted)]",
                 )}
                 aria-label={`Change status for ${module.title}`}

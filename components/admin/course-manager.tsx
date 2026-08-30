@@ -78,7 +78,9 @@ function AiPanel({ onDraft }: { onDraft: (course: Record<string, unknown>, note:
   }
 
   return (
-    <div className="rounded-[16px] border border-[var(--primary)]/30 bg-[var(--primary-soft)]/40 p-5">
+    <div className="relative overflow-hidden rounded-[17px] border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-[var(--primary-soft)] p-5">
+      <div className="pointer-events-none absolute -right-16 -top-16 size-44 rounded-full bg-[color-mix(in_srgb,var(--primary)_14%,transparent)] blur-3xl" />
+      <div className="relative">
       <div className="flex items-center gap-2">
         <Wand2 size={16} className="text-[var(--primary)]" />
         <h2 className="text-sm font-semibold">Author with Gemini</h2>
@@ -140,6 +142,7 @@ function AiPanel({ onDraft }: { onDraft: (course: Record<string, unknown>, note:
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -195,7 +198,7 @@ function Editor({ skills, initial, onSaved, onCancel }: { skills: SkillOption[];
   }
 
   return (
-    <div className="rounded-[16px] border bg-[var(--surface)] p-5">
+    <div className="aperio-panel p-5">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">{initial?.id ? "Edit course" : "New course"}</h2>
         <button onClick={onCancel} className="text-[var(--muted)] hover:text-[var(--foreground)]"><X size={16} /></button>
@@ -345,7 +348,7 @@ export function CourseManager({ initialCourses, skills, embedded }: { initialCou
         />
       )}
 
-      <div className="overflow-hidden rounded-[14px] border bg-[var(--surface)]">
+      <div className="aperio-panel overflow-hidden">
         {courses.map((c) => (
           <div key={String(c.id)} className="flex items-center justify-between gap-3 border-b px-4 py-3 last:border-0">
             <div className="min-w-0">

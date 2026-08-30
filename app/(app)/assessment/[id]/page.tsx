@@ -10,7 +10,7 @@ export default async function AssessmentPage({ params }: { params: Promise<{ id:
   const assessment = await getAssessment(user.id, (await params).id);
   if (!assessment) notFound();
   return (
-    <div className="mx-auto max-w-[1000px] px-5 py-8 lg:px-10 lg:py-10">
+    <div className="aperio-page mx-auto max-w-[1000px]">
       <AssessmentRunner assessment={assessment as never} />
     </div>
   );

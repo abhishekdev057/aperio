@@ -22,11 +22,14 @@ import { AperioBrand } from "@/components/aperio-brand";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const nav = [
+const coreNav = [
   { href: "/overview", label: "Overview", icon: ChartNoAxesCombined },
   { href: "/analyze", label: "Analyze", icon: FileSearch },
   { href: "/skills", label: "Skill Profile", mobileLabel: "Skills", icon: Target },
   { href: "/roadmap", label: "Roadmap", icon: Map },
+] as const;
+
+const growthNav = [
   { href: "/learning", label: "Course Plan", mobileLabel: "Plan", icon: GraduationCap },
   { href: "/courses", label: "Learn", icon: LibraryBig },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
@@ -34,19 +37,21 @@ const nav = [
   { href: "/history", label: "History", icon: History },
 ] as const;
 
+const nav = [...coreNav, ...growthNav] as const;
+
 const account = [
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-const mobile = [nav[0], nav[1], nav[2], nav[3], account[0]];
+const mobile = [coreNav[0], coreNav[1], coreNav[2], coreNav[3], account[0]];
 
 function NavLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: typeof Target; active: boolean }) {
   return (
-    <Link href={href} aria-current={active ? "page" : undefined} className={cn("group relative flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-medium transition-colors", active ? "bg-[var(--primary-soft)] text-[var(--primary-strong)]" : "text-[var(--muted-strong)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]")}>
+    <Link href={href} aria-current={active ? "page" : undefined} className={cn("group relative flex items-center gap-3 rounded-[11px] px-3 py-2.5 text-[13px] font-medium transition-all duration-200", active ? "bg-[var(--primary-soft)] text-[var(--primary-strong)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_5%,transparent)]" : "text-[var(--muted-strong)] hover:translate-x-0.5 hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]")}>
+      {active && <span className="absolute -left-4 h-5 w-[3px] rounded-r-full bg-[var(--primary)]" />}
       <Icon size={17} strokeWidth={active ? 2.1 : 1.8} />
       <span>{label}</span>
-      {active && <span className="ml-auto size-1.5 rounded-full bg-[var(--primary)]" />}
     </Link>
   );
 }
@@ -65,37 +70,37 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
   }
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[238px_minmax(0,1fr)]">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[238px] flex-col border-r bg-[color-mix(in_srgb,var(--surface)_94%,var(--background))] px-4 pb-4 pt-5 lg:flex">
+    <div className="min-h-screen lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[224px] flex-col border-r bg-[var(--sidebar)] px-4 pb-4 pt-5 lg:flex">
         <div className="px-2"><AperioBrand href="/overview" /></div>
-        <nav className="mt-8 space-y-1" aria-label="Primary navigation">
-          {nav.map(({ href, label, icon }) => <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />)}
-        </nav>
-        <div className="mx-2 my-5 border-t" />
-        <p className="px-3 text-[10px] font-semibold uppercase tracking-[.14em] text-[var(--muted)]">Account</p>
-        <nav className="mt-2 space-y-1" aria-label="Account navigation">
-          {accountItems.map(({ href, label, icon }) => <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />)}
-        </nav>
+        <div className="no-scrollbar mt-8 min-h-0 flex-1 overflow-y-auto pr-0.5">
+          <nav className="space-y-1" aria-label="Primary navigation">{coreNav.map(({ href, label, icon }) => <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />)}</nav>
+          <p className="mb-2 mt-6 px-3 text-[9px] font-semibold uppercase tracking-[.16em] text-[var(--muted)]">Grow</p>
+          <nav className="space-y-1" aria-label="Growth navigation">{growthNav.map(({ href, label, icon }) => <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />)}</nav>
+          <div className="mx-2 my-5 border-t" />
+          <p className="px-3 text-[9px] font-semibold uppercase tracking-[.16em] text-[var(--muted)]">Account</p>
+          <nav className="mt-2 space-y-1" aria-label="Account navigation">{accountItems.map(({ href, label, icon }) => <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />)}</nav>
+        </div>
 
-        <div className="mt-auto space-y-3">
-          <div className="rounded-[13px] border bg-[var(--primary-faint)] p-3.5">
-            <p className="text-xs font-semibold">Evidence-first guidance</p>
-            <p className="mt-1.5 text-[11px] leading-5 text-[var(--muted)]">Aperio explains every inference and keeps your corrections in control.</p>
-            <Link href="/skills" className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--primary)]">Review your skills <ChevronRight size={12} /></Link>
-          </div>
+        <div className="mt-auto space-y-3 border-t pt-4">
           <ThemeToggle showLabel />
+          <Link href="/profile" className="flex items-center gap-2.5 rounded-[11px] p-2 transition hover:bg-[var(--surface-muted)]">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[#2f6fea] text-[11px] font-bold text-white">{user.fullName.charAt(0).toUpperCase()}</span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{user.fullName}</span><span className="mt-0.5 block truncate text-[9px] text-[var(--muted)]">{user.email}</span></span>
+            <ChevronRight size={13} className="text-[var(--muted)]" />
+          </Link>
           <button onClick={logout} className="flex h-9 w-full items-center gap-2.5 rounded-[9px] px-3 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--critical-soft)] hover:text-[var(--critical)]"><LogOut size={15} />Sign out</button>
         </div>
       </aside>
 
       <section className="min-w-0 lg:col-start-2">
-        <header className="sticky top-0 z-30 flex h-[65px] items-center justify-between border-b bg-[var(--surface-glass)] px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between border-b bg-[var(--surface-glass)] px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <div className="lg:hidden"><AperioBrand href="/overview" /></div>
             <div className="hidden h-5 w-px bg-[var(--border)] sm:block lg:hidden" />
             <div className="hidden min-w-0 sm:block">
               <p className="truncate text-[15px] font-semibold">{current?.label ?? "Career workspace"}</p>
-              <p className="mt-0.5 hidden text-[10px] text-[var(--muted)] lg:block">Career readiness intelligence</p>
+              <p className="mt-0.5 hidden text-[10px] text-[var(--muted)] lg:block">Evidence-backed career intelligence</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

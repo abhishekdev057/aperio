@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { formatRelative } from "@/lib/utils";
 import { ActionLabel } from "@/components/admin/action-label";
+import { Activity, LoaderCircle } from "lucide-react";
 
 type Row = Record<string, unknown>;
 
@@ -40,18 +41,19 @@ export function ActivityFeed({ initial }: { initial: Row[] }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Activity</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">Every tracked user and admin action{loading ? " · loading…" : ""}.</p>
+          <p className="aperio-eyebrow text-[var(--primary)]"><Activity size={14} />Audit stream</p>
+          <h1 className="aperio-page-title mt-3">Activity</h1>
+          <p className="mt-2 text-sm text-[var(--muted)]">Every tracked user and admin action across the product.</p>
         </div>
-        <select value={action} onChange={(e) => setAction(e.target.value)} className="h-9 rounded-[9px] border bg-[var(--surface)] px-3 text-xs font-medium">
+        <label className="flex items-center gap-2 rounded-[10px] border bg-[var(--surface)] px-3"><span className="text-[10px] font-semibold uppercase tracking-[.1em] text-[var(--muted)]">Filter</span><select value={action} onChange={(e) => setAction(e.target.value)} className="h-10 bg-transparent text-xs font-medium outline-none">
           <option value="">All actions</option>
           {ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
+        </select>{loading && <LoaderCircle size={13} className="animate-spin text-[var(--muted)]" />}</label>
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-[14px] border bg-[var(--surface)]">
+      <div className="aperio-panel mt-6 overflow-hidden">
         {grouped.map((e) => (
           <div key={String(e.id)} className="grid grid-cols-[1fr_auto] items-start gap-3 border-b px-4 py-3 last:border-0">
             <div className="min-w-0">

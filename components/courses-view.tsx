@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Check, ChevronDown, Circle, GraduationCap, LoaderCircle, Lock, PlayCircle, Sparkles } from "lucide-react";
+import { BookOpen, Check, ChevronDown, Circle, GraduationCap, Layers3, LoaderCircle, Lock, PlayCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { purchaseItem } from "@/components/razorpay-checkout";
 import { cn } from "@/lib/utils";
@@ -106,27 +106,25 @@ export function CoursesView({ initial }: { initial: { recommended: RecCourse[]; 
   }
 
   return (
-    <div className="space-y-8">
-      <div className="max-w-2xl">
-        <p className="text-sm font-semibold text-[var(--primary)]">Courses</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-.04em]">Courses matched to your gaps</h1>
-        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">Structured courses your admins built, recommended by how well they cover the skills missing from your latest analysis — technical and soft.</p>
-      </div>
+    <div className="space-y-9">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="aperio-eyebrow text-[var(--primary)]"><Layers3 size={14} />Course catalog</p><h2 className="mt-2 text-2xl font-semibold tracking-[-.035em]">Courses matched to your gaps</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">Published courses are ranked by the skills missing from your latest analysis—technical and professional.</p></div></div>
 
       {error && <p role="alert" className="text-sm text-[var(--critical)]">{error}</p>}
 
       <section>
-        <h2 className="flex items-center gap-2 text-sm font-semibold"><Sparkles size={15} className="text-[var(--primary)]" />Recommended for you</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 text-sm font-semibold"><Sparkles size={15} className="text-[var(--primary)]" />Recommended for you</h2><span className="text-[10px] text-[var(--muted)]">{recommended.length} available</span></div>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
           {recommended.map((c) => (
-            <div key={c.id} className="rounded-[14px] border bg-[var(--surface)] p-4">
+            <div key={c.id} className="aperio-panel group relative overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow)]">
+              <div className="pointer-events-none absolute -right-12 -top-12 size-36 rounded-full bg-[var(--primary-soft)] blur-3xl" />
               <div className="flex items-center gap-2">
                 <span className="rounded bg-[var(--positive-soft)] px-1.5 text-[10px] font-semibold text-[var(--positive)]">{c.matchCount} gap match{c.matchCount === 1 ? "" : "es"}</span>
                 <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{c.track} · {c.level}</span>
               </div>
-              <h3 className="mt-2 font-semibold">{c.title}</h3>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{c.summary}</p>
-              <div className="mt-3 flex items-center gap-2">
+              <span className="relative mt-5 grid size-10 place-items-center rounded-[11px] bg-[var(--primary-soft)] text-[var(--primary)]"><BookOpen size={18} /></span>
+              <h3 className="relative mt-4 font-semibold">{c.title}</h3>
+              <p className="relative mt-1.5 line-clamp-3 text-xs leading-5 text-[var(--muted)]">{c.summary}</p>
+              <div className="relative mt-4 flex items-center gap-2">
                 <Button size="sm" onClick={() => enroll(c)} disabled={busy === c.id}>
                   {busy === c.id ? <LoaderCircle size={14} className="animate-spin" /> : Number(c.priceInr) > 0 && !c.owned ? <Lock size={14} /> : <BookOpen size={14} />}
                   {Number(c.priceInr) > 0 && !c.owned ? `Buy · ₹${Number(c.priceInr)}` : `Enrol · ${c.lessons} lessons`}
@@ -140,15 +138,16 @@ export function CoursesView({ initial }: { initial: { recommended: RecCourse[]; 
       </section>
 
       <section>
-        <h2 className="flex items-center gap-2 text-sm font-semibold"><GraduationCap size={15} className="text-[var(--primary)]" />Your courses</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold"><GraduationCap size={15} className="text-[var(--positive)]" />Your courses</h2>
         <div className="mt-3 space-y-3">
           {enrolled.map((c) => (
-            <div key={c.id} className="rounded-[14px] border bg-[var(--surface)] p-4">
+            <div key={c.id} className="aperio-panel p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold">{c.title}</h3>
                 <span className="text-xs text-[var(--muted)]">{c.completed}/{c.lessons} done{c.status === "completed" ? " · completed" : ""}</span>
               </div>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{c.summary}</p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)]"><div className="h-full rounded-full bg-[var(--positive)]" style={{ width: `${c.lessons ? (c.completed / c.lessons) * 100 : 0}%` }} /></div>
               <LessonList courseId={c.id} />
             </div>
           ))}

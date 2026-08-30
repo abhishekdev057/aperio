@@ -3,17 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
   BrainCircuit,
   Check,
   ChevronDown,
-  Eye,
-  FileCheck,
+  FileCheck2,
   FileSearch,
   Fingerprint,
+  ImageIcon,
   LoaderCircle,
   LockKeyhole,
   ScanLine,
-  Search,
   ShieldCheck,
   Sparkles,
   UploadCloud,
@@ -39,16 +39,16 @@ export type Resume = {
 };
 
 const analysisStages = [
-  "Understanding your experience",
-  "Mapping demonstrated skills",
-  "Comparing role expectations",
-  "Preparing your personal roadmap",
+  { label: "Reading resume", detail: "Understanding visible experience", icon: FileSearch },
+  { label: "Verifying evidence", detail: "Checking sources and confidence", icon: Fingerprint },
+  { label: "Mapping skills", detail: "Structuring demonstrated capabilities", icon: BrainCircuit },
+  { label: "Comparing role", detail: "Aligning evidence with expectations", icon: ShieldCheck },
 ];
 
 const uploadStages = [
-  { label: "Verifying file and document structure", icon: Fingerprint },
-  { label: "Reading text, layout, and visual signals", icon: ScanLine },
-  { label: "Extracting skills and supporting evidence", icon: BrainCircuit },
+  "Verifying file and document structure",
+  "Reading text, layout, and visual signals",
+  "Extracting skills and supporting evidence",
 ];
 
 function confidenceLabel(value?: number | string | null) {
@@ -72,13 +72,13 @@ export function AnalysisWorkbench({ roles, initialResumes, initialRoleId }: { ro
 
   useEffect(() => {
     if (!analyzing) return;
-    const timer = window.setInterval(() => setStage((value) => Math.min(analysisStages.length - 1, value + 1)), 1400);
+    const timer = window.setInterval(() => setStage((value) => Math.min(analysisStages.length - 1, value + 1)), 1500);
     return () => window.clearInterval(timer);
   }, [analyzing]);
 
   useEffect(() => {
     if (!uploading) return;
-    const timer = window.setInterval(() => setUploadStage((value) => (value + 1) % uploadStages.length), 1600);
+    const timer = window.setInterval(() => setUploadStage((value) => (value + 1) % uploadStages.length), 1500);
     return () => window.clearInterval(timer);
   }, [uploading]);
 
@@ -105,10 +105,7 @@ export function AnalysisWorkbench({ roles, initialResumes, initialRoleId }: { ro
   }
 
   async function analyze() {
-    if (!roleId) {
-      setError("Choose a target role.");
-      return;
-    }
+    if (!roleId) return setError("Choose a target role.");
     setAnalyzing(true);
     setStage(0);
     setError("");
@@ -128,97 +125,65 @@ export function AnalysisWorkbench({ roles, initialResumes, initialRoleId }: { ro
     }
   }
 
-  if (analyzing) {
-    return (
-      <section className="relative mx-auto max-w-3xl overflow-hidden rounded-[24px] border bg-[var(--surface)] p-8 shadow-[var(--shadow)] sm:p-12">
-        <div className="pointer-events-none absolute -right-24 -top-32 size-80 rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] blur-3xl" />
-        <div className="relative">
-          <div className="mx-auto grid size-14 place-items-center rounded-[16px] bg-[var(--primary-soft)] text-[var(--primary)]"><Sparkles size={24} className="animate-pulse" /></div>
-          <p className="mt-6 text-center text-xs font-semibold uppercase tracking-[.16em] text-[var(--primary)]">Aperio intelligence</p>
-          <h2 className="mt-2 text-center text-2xl font-semibold tracking-[-.03em]">Building your evidence-based analysis</h2>
-          <p className="mx-auto mt-2 max-w-lg text-center text-sm leading-6 text-[var(--muted)]">Your match score comes from stored role requirements. Gemini turns the verified evidence into guidance tailored to your profile.</p>
-          <div aria-live="polite" className="mx-auto mt-9 max-w-md space-y-3">
-            {analysisStages.map((label, index) => (
-              <div key={label} className={cn("flex items-center gap-3 rounded-[12px] border px-4 py-3 text-sm transition-colors", index === stage ? "border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--foreground)]" : "text-[var(--muted)]")}>
-                <span className={cn("grid size-6 place-items-center rounded-full", index < stage ? "bg-[var(--positive)] text-white" : index === stage ? "bg-[var(--primary)] text-white" : "bg-[var(--surface-muted)]")}>
-                  {index < stage ? <Check size={13} /> : index === stage ? <LoaderCircle size={13} className="animate-spin" /> : <span className="text-[10px]">{index + 1}</span>}
-                </span>
-                {label}
-              </div>
-            ))}
-          </div>
-          <p className="mt-6 text-center text-xs text-[var(--muted)]">No fabricated percentage or guaranteed outcome.</p>
-        </div>
-      </section>
-    );
-  }
-
   const selected = resumes.find((resume) => resume.id === resumeId);
   const selectedRole = roles.find((role) => role.id === roleId);
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[1.08fr_.92fr]">
-      <section className="relative overflow-hidden rounded-[22px] border bg-[var(--surface)] p-6 shadow-[var(--shadow)] sm:p-8">
-        <div className="pointer-events-none absolute right-0 top-0 h-44 w-44 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--primary)_12%,transparent),transparent_68%)]" />
-        <div className="relative flex items-start justify-between gap-5">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-[11px] bg-[var(--primary-soft)] text-[var(--primary)]"><Search size={18} /></span>
-            <div><p className="text-xs font-semibold uppercase tracking-[.13em] text-[var(--muted)]">01 · Target</p><h2 className="mt-1 text-lg font-semibold">Choose where you’re heading</h2></div>
-          </div>
-          <span className="hidden rounded-[8px] border bg-[var(--surface-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--muted)] sm:block">Role intelligence</span>
+    <section className="overflow-hidden rounded-[22px] border border-[#202b3b] bg-[#09101a] text-[#f5f7fb] shadow-[0_24px_70px_rgb(5_9_18/22%)]">
+      <div className="grid gap-3 border-b border-white/8 bg-[#0b121d] p-4 md:grid-cols-[1fr_auto] md:items-center lg:p-5">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_310px]">
+          <label className="relative block"><span className="sr-only">Career role</span><FileSearch size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8d98aa]" /><select value={roleId} onChange={(event) => setRoleId(event.target.value)} className="h-12 w-full appearance-none rounded-[11px] border border-[#2a3647] bg-[#0e1723] pl-11 pr-10 text-sm font-semibold text-white outline-none transition focus:border-[#7467f3]"><option value="" disabled>Choose a career role</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.title}</option>)}</select><ChevronDown size={15} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#8d98aa]" /></label>
+          <fieldset><legend className="sr-only">Experience target</legend><div className="grid h-12 grid-cols-3 rounded-[11px] border border-[#2a3647] bg-[#0e1723] p-1">{(["junior", "mid", "senior"] as const).map((item) => <button type="button" key={item} onClick={() => setLevel(item)} aria-pressed={level === item} className={cn("rounded-[8px] text-xs font-semibold capitalize transition-all", level === item ? "bg-[#5146e8] text-white shadow-lg" : "text-[#8d98aa] hover:text-white")}>{item}</button>)}</div></fieldset>
         </div>
+        <div className="text-right"><p className="text-[10px] font-semibold uppercase tracking-[.12em] text-[#7f8ba0]">Target context</p><p className="mt-1 text-xs font-semibold">{selectedRole?.title ?? "Choose a role"} · <span className="capitalize">{level}</span></p></div>
+      </div>
 
-        <label className="relative mt-8 block">
-          <span className="mb-2 block text-sm font-medium">Career role</span>
-          <div className="relative">
-            <select value={roleId} onChange={(event) => setRoleId(event.target.value)} className="h-13 w-full appearance-none rounded-[12px] border bg-[var(--surface-elevated)] px-4 pr-11 text-sm font-semibold outline-none transition focus:border-[var(--primary)]">
-              {roles.map((role) => <option key={role.id} value={role.id}>{role.title}</option>)}
-            </select>
-            <ChevronDown size={17} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-          </div>
-        </label>
+      <input ref={inputRef} className="sr-only" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp" onChange={(event) => upload(event.target.files?.[0])} />
 
-        <fieldset className="relative mt-6">
-          <legend className="mb-2 text-sm font-medium">Experience target</legend>
-          <div className="grid grid-cols-3 rounded-[13px] border bg-[var(--surface-muted)] p-1">
-            {(["junior", "mid", "senior"] as const).map((item) => (
-              <button type="button" key={item} onClick={() => setLevel(item)} aria-pressed={level === item} className={cn("h-10 rounded-[9px] text-sm font-semibold capitalize transition", level === item ? "bg-[var(--surface)] text-[var(--primary)] shadow-sm" : "text-[var(--muted)] hover:text-[var(--foreground)]")}>{item}</button>
-            ))}
-          </div>
-        </fieldset>
+      {selected && !uploading ? <div className="grid gap-3 border-b border-white/8 bg-[#0c1520] p-4 md:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,.55fr))] md:items-center lg:px-6">
+        <div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-white/6 text-[#7b70ff]"><FileCheck2 size={18} /></span><span className="min-w-0"><span className="block truncate text-xs font-semibold">{selected.filename}</span><span className="mt-1 block text-[10px] text-[#8995a8]">{(selected.fileSize / 1024).toFixed(0)} KB · {selected.candidateName || "Verified candidate"}</span></span><button type="button" onClick={() => setResumeId("")} className="ml-auto grid size-8 place-items-center rounded-lg text-[#7f8ba0] transition hover:bg-white/6 hover:text-white" aria-label="Remove selected resume"><X size={14} /></button></div>
+        <EvidenceMetric icon={ShieldCheck} title="Resume verified" detail={confidenceLabel(selected.validationConfidence)} tone="positive" />
+        <EvidenceMetric icon={ScanLine} title="OCR ready" detail="Text and layout extracted" />
+        <EvidenceMetric icon={ImageIcon} title="Image support" detail="Scanned pages supported" />
+      </div> : null}
 
-        <div className="relative mt-7 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[13px] bg-[var(--surface-elevated)] p-4"><Eye size={16} className="text-[var(--positive)]" /><p className="mt-3 text-sm font-semibold">Evidence over assumptions</p><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Skills are tied to visible resume or profile evidence.</p></div>
-          <div className="rounded-[13px] bg-[var(--surface-elevated)] p-4"><ShieldCheck size={16} className="text-[var(--primary)]" /><p className="mt-3 text-sm font-semibold">Constructive language</p><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Missing means “not demonstrated,” never “you don’t know it.”</p></div>
-        </div>
-        {selectedRole && <p className="relative mt-5 text-xs text-[var(--muted)]">Assessing your profile against <span className="font-semibold text-[var(--foreground)]">{selectedRole.title}</span> requirements for a <span className="font-semibold capitalize text-[var(--foreground)]">{level}</span> target.</p>}
-      </section>
+      <div className="relative min-h-[480px] overflow-hidden p-5 sm:p-7 lg:p-8">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_48%_40%,rgb(79_70_229/14%),transparent_34%)]" />
+        {uploading ? <UploadProcessing stage={uploadStage} /> : analyzing ? <AnalysisProcessing stage={stage} role={selectedRole?.title} filename={selected?.filename} /> : selected ? <ReadyWorkspace selected={selected} onReplace={() => inputRef.current?.click()} /> : <ResumeDropzone onChoose={() => inputRef.current?.click()} onDrop={upload} />}
+      </div>
 
-      <section className="rounded-[22px] border bg-[var(--surface)] p-6 sm:p-8">
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-[11px] bg-[var(--attention-soft)] text-[var(--attention)]"><FileSearch size={18} /></span><div><p className="text-xs font-semibold uppercase tracking-[.13em] text-[var(--muted)]">02 · Evidence</p><h2 className="mt-1 text-lg font-semibold">Add your current resume</h2></div></div>
-        <input ref={inputRef} className="sr-only" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp" onChange={(event) => upload(event.target.files?.[0])} />
+      <div className="border-t border-white/8 bg-[#0b121d] p-4 sm:p-5">
+        <div className="mx-auto max-w-xl"><Button onClick={analyze} size="lg" className="h-12 w-full rounded-[11px] bg-gradient-to-r from-[#5548e9] to-[#4f46e5] text-white shadow-[0_14px_34px_rgb(62_50_220/28%)] hover:from-[#6559f3] hover:to-[#5a51eb]" disabled={!roleId || uploading || analyzing}><Sparkles size={17} />Analyze skill gap <ArrowRight size={16} className="ml-auto" /></Button><p className="mt-3 flex items-center justify-center gap-2 text-center text-[10px] text-[#7f8ba0]"><LockKeyhole size={11} />Evidence is processed securely and remains under your control.</p>{error && <div role="alert" className="mt-4 rounded-[10px] border border-[#71363c] bg-[#321a20] p-3 text-xs text-[#ff9aa0]">{error}</div>}</div>
+      </div>
 
-        {uploading ? (
-          <div aria-live="polite" className="mt-7 overflow-hidden rounded-[16px] border border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[var(--surface-elevated)]">
-            <div className="relative h-24 overflow-hidden border-b bg-[var(--surface-muted)]"><div className="absolute inset-x-6 top-5 h-14 rounded-[7px] border bg-[var(--surface)] opacity-70" /><div className="absolute inset-x-0 top-1/2 h-px bg-[var(--primary)] shadow-[0_0_16px_var(--primary)] motion-safe:animate-pulse" /><ScanLine className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[var(--primary)]" size={24} /></div>
-            <div className="p-4"><p className="text-sm font-semibold">Gemini is verifying your document</p><div className="mt-3 space-y-2">{uploadStages.map(({ label, icon: Icon }, index) => <div key={label} className={cn("flex items-center gap-2 text-xs", index === uploadStage ? "text-[var(--foreground)]" : "text-[var(--muted)]")}>{index === uploadStage ? <LoaderCircle size={14} className="animate-spin text-[var(--primary)]" /> : <Icon size={14} />}{label}</div>)}</div></div>
-          </div>
-        ) : selected ? (
-          <div className="mt-7 rounded-[16px] border border-[color-mix(in_srgb,var(--positive)_35%,var(--border))] bg-[var(--positive-soft)] p-4">
-            <div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-[var(--surface)] text-[var(--positive)]"><FileCheck size={18} /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="max-w-full truncate text-sm font-semibold">{selected.filename}</p><span className="rounded-[6px] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.08em] text-[var(--positive)]">Gemini verified</span></div><p className="mt-1 text-xs text-[var(--muted)]">{selected.candidateName || "Resume candidate"} · {(selected.fileSize / 1024).toFixed(0)} KB</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-medium text-[var(--muted-strong)]"><span>{confidenceLabel(selected.validationConfidence)}</span>{typeof selected.skillsDetected === "number" && <span>{selected.skillsDetected} skill signals found</span>}</div></div><button type="button" onClick={() => setResumeId("")} className="grid size-8 shrink-0 place-items-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface)]" aria-label="Remove selected resume"><X size={15} /></button></div>
-            <button type="button" onClick={() => inputRef.current?.click()} className="mt-4 text-xs font-semibold text-[var(--primary)]">Replace resume</button>
-          </div>
-        ) : (
-          <button type="button" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); upload(event.dataTransfer.files?.[0]); }} className="group mt-7 flex w-full flex-col items-center rounded-[16px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-elevated)] px-5 py-8 text-center transition hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]"><span className="grid size-11 place-items-center rounded-[12px] bg-[var(--primary-soft)] text-[var(--primary)] transition group-hover:bg-[var(--surface)]"><UploadCloud size={20} /></span><span className="mt-4 text-sm font-semibold">Drop your resume here</span><span className="mt-1 text-xs text-[var(--muted)]">or click to browse · PDF, DOCX, JPG, PNG, WebP · 5 MB max</span><span className="mt-4 inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted-strong)]"><ScanLine size={13} />Scans and image-based resumes supported</span></button>
-        )}
-
-        {resumes.length > 1 && !uploading && <label className="mt-4 block"><span className="mb-2 block text-xs font-medium text-[var(--muted)]">Previously verified resumes</span><select value={resumeId} onChange={(event) => setResumeId(event.target.value)} className="h-10 w-full rounded-[9px] border bg-[var(--surface)] px-3 text-xs"><option value="">Use profile only</option>{resumes.map((resume) => <option key={resume.id} value={resume.id}>{resume.filename}</option>)}</select></label>}
-
-        <div className="my-6 flex items-center gap-3 text-xs text-[var(--muted)]"><span className="h-px flex-1 bg-[var(--border)]" />ready to assess<span className="h-px flex-1 bg-[var(--border)]" /></div>
-        <Button onClick={analyze} size="lg" className="w-full" disabled={!roleId || uploading}><Sparkles size={17} />Analyze skill gap</Button>
-        <div className="mt-4 flex items-start gap-2 text-[11px] leading-5 text-[var(--muted)]"><LockKeyhole size={13} className="mt-0.5 shrink-0" /><p>Your file is sent securely to Gemini for OCR and resume verification. Aperio stores extracted evidence and metadata, never a public resume URL.</p></div>
-        {error && <div role="alert" className="mt-4 rounded-[10px] border border-[color-mix(in_srgb,var(--critical)_25%,var(--border))] bg-[var(--critical-soft)] p-3 text-sm text-[var(--critical)]">{error}</div>}
-      </section>
-    </div>
+      {resumes.length > 1 && !uploading && !analyzing && <div className="border-t border-white/8 bg-[#0b121d] px-5 py-3"><label className="mx-auto flex max-w-xl items-center gap-3"><span className="text-[10px] font-semibold text-[#8995a8]">Use previous resume</span><select value={resumeId} onChange={(event) => setResumeId(event.target.value)} className="h-8 min-w-0 flex-1 rounded-[8px] border border-[#2a3647] bg-[#0e1723] px-2 text-[10px] text-white"><option value="">Use profile only</option>{resumes.map((resume) => <option key={resume.id} value={resume.id}>{resume.filename}</option>)}</select></label></div>}
+    </section>
   );
+}
+
+function EvidenceMetric({ icon: Icon, title, detail, tone }: { icon: typeof ShieldCheck; title: string; detail: string; tone?: "positive" }) {
+  return <div className="flex items-center gap-2.5"><span className={cn("grid size-8 shrink-0 place-items-center rounded-[8px] bg-white/5", tone === "positive" ? "text-[#45d68b]" : "text-[#8b83ff]")}><Icon size={15} /></span><span className="min-w-0"><span className={cn("block truncate text-[10px] font-semibold", tone === "positive" && "text-[#45d68b]")}>{title}</span><span className="mt-0.5 block truncate text-[9px] text-[#7f8ba0]">{detail}</span></span></div>;
+}
+
+function ResumeDropzone({ onChoose, onDrop }: { onChoose: () => void; onDrop: (file?: File) => void }) {
+  return <button type="button" onClick={onChoose} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop(event.dataTransfer.files?.[0]); }} className="relative mx-auto flex min-h-[420px] w-full max-w-3xl flex-col items-center justify-center rounded-[18px] border border-dashed border-[#344256] bg-[#0d1621]/70 px-6 text-center transition hover:border-[#7467f3] hover:bg-[#10192a]"><span className="grid size-14 place-items-center rounded-[16px] bg-[#1b1d42] text-[#8c84ff]"><UploadCloud size={24} /></span><h2 className="mt-5 text-lg font-semibold">Add your current resume</h2><p className="mt-2 max-w-sm text-xs leading-5 text-[#8995a8]">Drop a PDF, DOCX, JPG, PNG, or WebP here, or click to browse. Up to 5 MB.</p><span className="mt-5 inline-flex items-center gap-2 rounded-[8px] border border-white/7 bg-white/4 px-3 py-2 text-[10px] text-[#a9b3c2]"><ScanLine size={13} />OCR and image-based resumes supported</span></button>;
+}
+
+function ReadyWorkspace({ selected, onReplace }: { selected: Resume; onReplace: () => void }) {
+  return <div className="relative mx-auto grid max-w-5xl items-center gap-8 lg:grid-cols-[.76fr_1.24fr]">
+    <div className="relative mx-auto w-full max-w-[310px]"><div className="absolute -inset-5 rounded-[28px] bg-[#5146e8]/10 blur-2xl" /><div className="relative aspect-[.76] rounded-[14px] border border-[#344256] bg-[#101a26] p-5 shadow-2xl"><div className="flex items-center gap-2 border-b border-white/8 pb-4"><FileCheck2 size={16} className="text-[#45d68b]" /><span className="max-w-[210px] truncate text-[10px] font-semibold">{selected.filename}</span></div><div className="mt-5 space-y-3">{[88, 72, 93, 65, 84, 58, 76, 46].map((width, index) => <span key={index} className="block h-1.5 rounded-full bg-[#293546]" style={{ width: `${width}%` }} />)}</div><div className="absolute inset-x-5 top-[46%] h-px bg-[#7467f3] shadow-[0_0_16px_#7467f3]" /><ScanLine size={22} className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 text-[#8c84ff]" /></div></div>
+    <div><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#8177ff]">Ready to assess</p><h2 className="mt-3 text-2xl font-semibold tracking-[-.035em]">Your evidence is structured and ready.</h2><p className="mt-3 max-w-xl text-sm leading-6 text-[#8995a8]">Aperio will compare only verified resume and profile evidence with stored role requirements. Skill classifications remain explainable and correctable.</p><div className="mt-7 grid gap-3 sm:grid-cols-2"><TrustPoint icon={Fingerprint} title="Evidence-linked" detail="Every inferred skill keeps its source." /><TrustPoint icon={ShieldCheck} title="Constructive guidance" detail="Gaps mean not demonstrated—not inability." /></div><button type="button" onClick={onReplace} className="mt-6 text-xs font-semibold text-[#8c84ff]">Replace resume</button></div>
+  </div>;
+}
+
+function TrustPoint({ icon: Icon, title, detail }: { icon: typeof ShieldCheck; title: string; detail: string }) {
+  return <div className="rounded-[12px] border border-white/8 bg-white/[.025] p-4"><Icon size={16} className="text-[#8177ff]" /><p className="mt-3 text-xs font-semibold">{title}</p><p className="mt-1 text-[10px] leading-4 text-[#7f8ba0]">{detail}</p></div>;
+}
+
+function UploadProcessing({ stage }: { stage: number }) {
+  return <div className="relative mx-auto flex min-h-[420px] max-w-3xl flex-col items-center justify-center text-center"><span className="grid size-16 place-items-center rounded-[18px] bg-[#1b1d42] text-[#8c84ff]"><ScanLine size={28} className="animate-pulse" /></span><h2 className="mt-6 text-xl font-semibold">Verifying your document</h2><p className="mt-2 text-xs text-[#8995a8]">Gemini is checking that the file is a real resume and extracting visible evidence.</p><div className="mt-8 w-full max-w-md space-y-2">{uploadStages.map((label, index) => <div key={label} className={cn("flex items-center gap-3 rounded-[10px] border px-4 py-3 text-left text-xs transition", index === stage ? "border-[#5b50f2] bg-[#161b36] text-white" : "border-white/6 text-[#718096]")}><span className={cn("grid size-6 shrink-0 place-items-center rounded-full", index === stage ? "bg-[#5146e8] text-white" : "bg-white/5")}>{index === stage ? <LoaderCircle size={13} className="animate-spin" /> : index + 1}</span>{label}</div>)}</div></div>;
+}
+
+function AnalysisProcessing({ stage, role, filename }: { stage: number; role?: string; filename?: string }) {
+  return <div className="relative mx-auto min-h-[420px] max-w-5xl"><div className="grid gap-8 lg:grid-cols-[.78fr_1.22fr] lg:items-center"><div className="rounded-[16px] border border-white/8 bg-[#0d1722] p-5"><div className="flex items-center gap-2 border-b border-white/8 pb-4"><FileSearch size={15} className="text-[#8177ff]" /><span className="truncate text-[10px] font-semibold">{filename || "Profile evidence"}</span></div><div className="mt-5 space-y-3">{[88, 72, 93, 61, 84, 69, 76].map((width, index) => <div key={index} className="flex items-center gap-3"><span className="h-1.5 rounded-full bg-[#273447]" style={{ width: `${width}%` }} />{index <= stage && <span className="size-1.5 rounded-full bg-[#8177ff] shadow-[0_0_10px_#8177ff]" />}</div>)}</div></div><div><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#8177ff]">Analysis in progress</p><h2 className="mt-3 text-2xl font-semibold tracking-[-.035em]">Building your {role || "role"} readiness map</h2><div className="mt-7 space-y-3">{analysisStages.map(({ label, detail, icon: Icon }, index) => <div key={label} className={cn("flex items-center gap-3 rounded-[11px] border px-4 py-3.5 transition", index === stage ? "border-[#5b50f2] bg-[#161b36]" : index < stage ? "border-[#24523e] bg-[#10251e]" : "border-white/6")}><span className={cn("grid size-8 shrink-0 place-items-center rounded-full", index < stage ? "bg-[#2cb879] text-white" : index === stage ? "bg-[#5146e8] text-white" : "bg-white/5 text-[#718096]")}>{index < stage ? <Check size={14} /> : index === stage ? <LoaderCircle size={14} className="animate-spin" /> : <Icon size={14} />}</span><span><span className="block text-xs font-semibold">{label}</span><span className="mt-1 block text-[10px] text-[#7f8ba0]">{detail}</span></span></div>)}</div></div></div><p className="mt-8 text-center text-[10px] text-[#718096]">No fake completion percentage or guaranteed outcome.</p></div>;
 }

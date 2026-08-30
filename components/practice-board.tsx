@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Circle, Clock3, Dumbbell, LoaderCircle, PlayCircle, Sparkles } from "lucide-react";
+import { Check, Circle, Clock3, Dumbbell, LoaderCircle, PlayCircle, Sparkles, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Drill = { title: string; instruction: string; timeboxMinutes: number };
@@ -59,14 +59,14 @@ export function PracticeBoard({ initial }: { initial: { sessions: Session[]; sug
   return (
     <div>
       <div className="max-w-2xl">
-        <p className="text-sm font-semibold text-[var(--primary)]">Targeted practice</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-.04em]">Practice the skills you lack</h1>
-        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">Short, timeboxed drills for each gap — hands-on reps for technical skills, real workplace actions for soft skills. Progress is tracked, not treated as proof of mastery.</p>
+        <p className="aperio-eyebrow text-[var(--primary)]"><Target size={14} />Targeted practice</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-[-.035em]">Practice the skills that need evidence</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Short, timeboxed drills for each gap—hands-on reps for technical skills and workplace actions for professional skills.</p>
       </div>
 
       {suggestions.length > 0 && (
-        <section className="mt-7 rounded-[16px] border bg-[var(--surface)] p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">From your latest analysis</p>
+        <section className="mt-7 overflow-hidden rounded-[17px] border bg-[linear-gradient(110deg,var(--primary-faint),var(--surface))] p-5">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"><Sparkles size={14} className="text-[var(--primary)]" />Build from your latest gaps</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {suggestions.map((s) => (
               <button
@@ -88,7 +88,7 @@ export function PracticeBoard({ initial }: { initial: { sessions: Session[]; sug
 
       <div className="mt-5 space-y-4">
         {sessions.map((session) => (
-          <article key={session.id} className="rounded-[16px] border bg-[var(--surface)] p-5">
+          <article key={session.id} className="aperio-panel p-5 transition hover:border-[var(--border-strong)]">
             <div className="flex items-start gap-4">
               <button
                 onClick={() => cycle(session)}

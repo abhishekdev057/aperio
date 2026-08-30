@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, Loader, LoaderCircle, Lock, Trophy, X } from "lucide-react";
+import { Check, ChevronLeft, FileQuestion, Loader, LoaderCircle, Lock, Trophy, X } from "lucide-react";
 import { purchaseItem } from "@/components/razorpay-checkout";
 import { cn } from "@/lib/utils";
 
@@ -204,7 +204,7 @@ export function QuizSets({ initial }: { initial: SetRow[] }) {
 
   return (
     <section className="mt-10">
-      <h2 className="text-lg font-semibold tracking-[-.02em]">Question sets</h2>
+      <h2 className="flex items-center gap-2 text-lg font-semibold tracking-[-.02em]"><FileQuestion size={18} className="text-[var(--primary)]" />Question sets</h2>
       <p className="mt-1 text-sm text-[var(--muted)]">Timed-free multiple-choice sets across topics. Retake any set to raise your score.</p>
       {error && <p role="alert" className="mt-2 text-sm text-[var(--critical)]">{error}</p>}
 
@@ -220,7 +220,7 @@ export function QuizSets({ initial }: { initial: SetRow[] }) {
                     key={s.id}
                     onClick={() => openSet(s)}
                     disabled={buying === s.id}
-                    className="rounded-[14px] border bg-[var(--surface)] p-4 text-left transition hover:border-[var(--primary)] disabled:opacity-60"
+                    className="aperio-panel relative overflow-hidden p-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:shadow-[var(--shadow)] disabled:opacity-60"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold">{s.title}</h3>
