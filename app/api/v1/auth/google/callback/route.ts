@@ -8,6 +8,7 @@ import { sendWelcomeEmail } from "@/lib/email";
 import { db, one, query } from "@/lib/db";
 import {
   OAUTH_STATE_COOKIE,
+  canonicalOrigin,
   exchangeGoogleCode,
   fetchGoogleProfile,
   googleRedirectUri,
@@ -20,12 +21,16 @@ export const maxDuration = 30;
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const base = process.env.APP_ORIGIN?.trim() || url.origin;
-  const back = (path: string) => NextResponse.redirect(new URL(path, base));
+  const base = canonicalOrigin(url.origin);
+  // Clear the one-time state cookie on every response we return from here.
+  const back = (path: string) => {
+    const response = NextResponse.redirect(new URL(path, base));
+    response.cookies.set(OAUTH_STATE_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+    return response;
+  };
 
   const cookieStore = await cookies();
   const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
-  cookieStore.set(OAUTH_STATE_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 
   if (!isGoogleOAuthConfigured()) return back("/login?error=google_unavailable");
 

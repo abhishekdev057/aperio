@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   Briefcase,
   ChartNoAxesCombined,
@@ -11,6 +12,7 @@ import {
   GraduationCap,
   History,
   LibraryBig,
+  LoaderCircle,
   LogOut,
   Map,
   Settings,
@@ -21,6 +23,14 @@ import {
 import { AperioBrand } from "@/components/aperio-brand";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const nav = [
   { href: "/overview", label: "Overview", icon: ChartNoAxesCombined },
@@ -54,18 +64,26 @@ function NavLink({ href, label, icon: Icon, active }: { href: string; label: str
 export function AppShell({ children, user }: { children: React.ReactNode; user: { fullName: string; email: string; role?: string } }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
   const accountItems = user.role === "admin" ? [...account, { href: "/admin", label: "Admin", icon: Shield }] : account;
   const allItems = [...nav, ...accountItems];
   const current = allItems.find((item) => pathname.startsWith(item.href));
+  const initial = user.fullName.trim().charAt(0).toUpperCase() || "A";
 
   async function logout() {
-    await fetch("/api/v1/auth/logout", { method: "POST" });
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await fetch("/api/v1/auth/logout", { method: "POST" });
+    } catch {
+      // Even if the request fails, send the user to the sign-in screen.
+    }
     router.push("/login");
     router.refresh();
   }
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[238px_minmax(0,1fr)]">
+    <div className="min-h-[100dvh] lg:grid lg:grid-cols-[238px_minmax(0,1fr)]">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[238px] flex-col border-r bg-[color-mix(in_srgb,var(--surface)_94%,var(--background))] px-4 pb-4 pt-5 lg:flex">
         <div className="px-2"><AperioBrand href="/overview" /></div>
         <nav className="mt-8 space-y-1" aria-label="Primary navigation">
@@ -84,12 +102,15 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
             <Link href="/skills" className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--primary)]">Review your skills <ChevronRight size={12} /></Link>
           </div>
           <ThemeToggle showLabel />
-          <button onClick={logout} className="flex h-9 w-full items-center gap-2.5 rounded-[9px] px-3 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--critical-soft)] hover:text-[var(--critical)]"><LogOut size={15} />Sign out</button>
+          <button onClick={logout} disabled={signingOut} className="flex h-9 w-full items-center gap-2.5 rounded-[9px] px-3 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--critical-soft)] hover:text-[var(--critical)] disabled:opacity-60">
+            {signingOut ? <LoaderCircle size={15} className="animate-spin" /> : <LogOut size={15} />}
+            {signingOut ? "Signing out…" : "Sign out"}
+          </button>
         </div>
       </aside>
 
       <section className="min-w-0 lg:col-start-2">
-        <header className="sticky top-0 z-30 flex h-[65px] items-center justify-between border-b bg-[var(--surface-glass)] px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-30 flex h-[65px] items-center justify-between gap-3 border-b bg-[var(--surface-glass)] px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <div className="lg:hidden"><AperioBrand href="/overview" /></div>
             <div className="hidden h-5 w-px bg-[var(--border)] sm:block lg:hidden" />
@@ -100,11 +121,40 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle className="lg:hidden" />
-            <Link href="/profile" className="flex h-10 items-center gap-2.5 rounded-[10px] px-1.5 transition hover:bg-[var(--surface-muted)] sm:px-2" aria-label={`Open profile for ${user.fullName}`}>
-              <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[#2f6fea] text-[11px] font-bold text-white">{user.fullName.charAt(0).toUpperCase()}</span>
-              <span className="hidden max-w-36 truncate text-xs font-semibold sm:block">{user.fullName}</span>
-              <ChevronRight size={13} className="hidden text-[var(--muted)] sm:block" />
-            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="flex h-10 items-center gap-2.5 rounded-[10px] px-1.5 outline-none transition hover:bg-[var(--surface-muted)] focus-visible:ring-2 focus-visible:ring-[var(--primary)] sm:px-2"
+                aria-label={`Account menu for ${user.fullName}`}
+              >
+                <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[#2f6fea] text-[11px] font-bold text-white">{initial}</span>
+                <span className="hidden max-w-36 truncate text-xs font-semibold sm:block">{user.fullName}</span>
+                <ChevronRight size={13} className="hidden text-[var(--muted)] sm:block" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>
+                  <p className="truncate text-[13px] font-semibold">{user.fullName}</p>
+                  <p className="truncate text-[11px] text-[var(--muted)]">{user.email}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {accountItems.map(({ href, label, icon: Icon }) => (
+                  <DropdownMenuItem key={href} onSelect={() => router.push(href)}>
+                    <Icon size={15} />{label}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  tone="critical"
+                  disabled={signingOut}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    void logout();
+                  }}
+                >
+                  {signingOut ? <LoaderCircle size={15} className="animate-spin" /> : <LogOut size={15} />}
+                  {signingOut ? "Signing out…" : "Sign out"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
         <main>{children}</main>

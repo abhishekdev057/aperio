@@ -21,13 +21,21 @@ export function isGoogleOAuthConfigured() {
 }
 
 /**
- * The redirect URI must exactly match one registered in the Google Cloud console.
- * Set APP_ORIGIN (e.g. https://aperio-umber.vercel.app) in production; locally we
+ * The single origin the whole OAuth round-trip must run on. Google redirects
+ * back to APP_ORIGIN, so the state cookie has to be set on that same host —
+ * otherwise the first attempt fails with `google_state` and only the retry
+ * (which now starts on APP_ORIGIN) succeeds. Locally APP_ORIGIN is unset and we
  * fall back to the incoming request origin (http://localhost:3000).
  */
+export function canonicalOrigin(requestOrigin: string) {
+  return (process.env.APP_ORIGIN?.trim() || requestOrigin).replace(/\/+$/, "");
+}
+
+/**
+ * The redirect URI must exactly match one registered in the Google Cloud console.
+ */
 export function googleRedirectUri(requestOrigin: string) {
-  const base = (process.env.APP_ORIGIN?.trim() || requestOrigin).replace(/\/+$/, "");
-  return `${base}/api/v1/auth/google/callback`;
+  return `${canonicalOrigin(requestOrigin)}/api/v1/auth/google/callback`;
 }
 
 export function buildGoogleAuthUrl(input: { state: string; redirectUri: string }) {

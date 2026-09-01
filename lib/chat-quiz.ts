@@ -113,6 +113,19 @@ async function saveSession(id: string, patch: Partial<{
 
 // --- channel adapters: present a single-choice list, return a correlation ref ---
 
+// Plain-text fallback when a tappable list / poll can't be sent (provider
+// error, option too long, …). resolveChoiceIndex already accepts a typed
+// letter, so the flow keeps working — just without the tap UI.
+async function sendChoiceText(
+  channel: Channel,
+  peerId: string,
+  body: string,
+  options: Array<{ label: string; sub?: string }>,
+) {
+  const lines = options.map((o, i) => `${LETTERS[i] ?? i + 1}. ${o.label}${o.sub ? ` — ${o.sub}` : ""}`);
+  await sendPlain(channel, peerId, `${body}\n\n${lines.join("\n")}\n\nReply with a letter (A, B, C…).`);
+}
+
 async function presentChoices(
   channel: Channel,
   peerId: string,
@@ -123,29 +136,41 @@ async function presentChoices(
   letterTitles = false,
 ): Promise<{ ref: string | null }> {
   if (channel === "whatsapp") {
-    const { sendWhatsAppChoiceList } = await import("@/lib/whatsapp");
-    const ref = await sendWhatsAppChoiceList(
-      peerId,
-      header,
-      body,
-      options.map((o, i) =>
-        letterTitles
-          ? { id: `${idPrefix}:${i}`, title: LETTERS[i] ?? String(i + 1), description: o.label }
-          : { id: `${idPrefix}:${i}`, title: o.label, description: o.sub },
-      ),
-    );
-    return { ref };
+    try {
+      const { sendWhatsAppChoiceList } = await import("@/lib/whatsapp");
+      const ref = await sendWhatsAppChoiceList(
+        peerId,
+        header,
+        body,
+        options.map((o, i) =>
+          letterTitles
+            ? { id: `${idPrefix}:${i}`, title: LETTERS[i] ?? String(i + 1), description: o.label }
+            : { id: `${idPrefix}:${i}`, title: o.label, description: o.sub },
+        ),
+      );
+      return { ref };
+    } catch (error) {
+      console.error("quiz: whatsapp choice list failed, falling back to text", error instanceof Error ? error.message : error);
+      await sendChoiceText(channel, peerId, body, options);
+      return { ref: null };
+    }
   }
   if (channel === "telegram_bot") {
-    const { sendTelegramMessage, sendTelegramPoll } = await import("@/lib/telegram");
-    if (body.length > 240) await sendTelegramMessage(peerId, body).catch(() => {});
-    const pollQuestion = body.length > 240 ? header : `${header}\n${body}`.slice(0, 290) || header;
-    const pollId = await sendTelegramPoll(
-      peerId,
-      pollQuestion,
-      options.map((o, i) => `${LETTERS[i] ?? i + 1}. ${o.label}${o.sub ? ` — ${o.sub}` : ""}`),
-    );
-    return { ref: pollId };
+    try {
+      const { sendTelegramMessage, sendTelegramPoll } = await import("@/lib/telegram");
+      if (body.length > 240) await sendTelegramMessage(peerId, body).catch(() => {});
+      const pollQuestion = body.length > 240 ? header : `${header}\n${body}`.slice(0, 290) || header;
+      const pollId = await sendTelegramPoll(
+        peerId,
+        pollQuestion,
+        options.map((o, i) => `${LETTERS[i] ?? i + 1}. ${o.label}${o.sub ? ` — ${o.sub}` : ""}`),
+      );
+      return { ref: pollId };
+    } catch (error) {
+      console.error("quiz: telegram poll failed, falling back to text", error instanceof Error ? error.message : error);
+      await sendChoiceText(channel, peerId, body, options);
+      return { ref: null };
+    }
   }
   // telegram_userbot: a user account can't capture taps on its own poll —
   // handled by the caller (redirect to the bot).

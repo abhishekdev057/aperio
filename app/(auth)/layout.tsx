@@ -9,10 +9,10 @@ const points = ["Evidence-linked skills", "Role-specific gaps", "A plan you can 
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main className="grid min-h-screen lg:grid-cols-[.9fr_1.1fr]">
-      <section className="flex flex-col bg-[var(--surface)] px-6 py-6 sm:px-10 lg:px-16">
+    <main className="grid min-h-[100dvh] lg:grid-cols-[.9fr_1.1fr]">
+      <section className="flex flex-col bg-[var(--surface)] px-5 py-6 sm:px-10 sm:py-8 lg:px-16">
         <AperioBrand />
-        <div className="my-auto mx-auto w-full max-w-[420px] py-16">{children}</div>
+        <div className="mx-auto flex w-full max-w-[400px] flex-1 flex-col justify-center py-10 sm:py-14">{children}</div>
         <p className="text-center text-xs text-[var(--muted)]">Guidance based on the profile evidence you provide.</p>
       </section>
 
