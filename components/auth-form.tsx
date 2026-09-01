@@ -99,7 +99,18 @@ export function AuthForm({ mode, oauthError }: { mode: "login" | "register"; oau
           <Input name="email" type="email" autoComplete="email" required placeholder="you@example.com" disabled={busy} />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-[13px] font-medium">Password</span>
+          <span className="mb-1.5 flex items-center justify-between text-[13px] font-medium">
+            Password
+            {mode === "login" && (
+              <Link
+                href="/forgot-password"
+                className="font-semibold text-[var(--primary)] hover:underline"
+                tabIndex={busy ? -1 : undefined}
+              >
+                Forgot password?
+              </Link>
+            )}
+          </span>
           <Input
             name="password"
             type="password"

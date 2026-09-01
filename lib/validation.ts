@@ -15,6 +15,15 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.email().transform((value) => value.toLowerCase()),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(16).max(200),
+  password: z.string().min(10, "Use at least 10 characters").max(128),
+});
+
 export const profileSchema = z.object({
   fullName: z.string().trim().min(2).max(80).optional(),
   headline: z.string().trim().max(140).optional().nullable(),

@@ -5,6 +5,17 @@ import { one, query } from "@/lib/db";
 
 export type ItemType = "course" | "question_set";
 
+export interface PurchaseReceipt {
+  userId: string;
+  paymentId: string;
+  title: string;
+  itemType: ItemType;
+  amountInr: number;
+  currency: string;
+  orderId: string | null;
+  providerPaymentId: string | null;
+}
+
 export function getRazorpayConfig() {
   const keyId = process.env.RAZORPAY_KEY_ID?.trim() || "";
   const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim() || "";
@@ -109,13 +120,14 @@ export async function confirmPurchase(
     .digest("hex");
   if (expected !== input.signature) throw new Error("BAD_SIGNATURE");
 
-  const pay = await one<{ id: string; itemType: ItemType; itemId: string; status: string }>(
-    `SELECT id, item_type AS "itemType", item_id AS "itemId", status
+  const pay = await one<{ id: string; itemType: ItemType; itemId: string; status: string; amountInr: number }>(
+    `SELECT id, item_type AS "itemType", item_id AS "itemId", status, amount_inr AS "amountInr"
        FROM payments WHERE order_id = $1 AND user_id = $2 LIMIT 1`,
     [input.orderId, userId],
   );
   if (!pay) throw new Error("ORDER_NOT_FOUND");
 
+  let receipt: PurchaseReceipt | null = null;
   if (pay.status !== "paid") {
     await query(
       `UPDATE payments SET status = 'paid', payment_id = $2, paid_at = now() WHERE id = $1`,
@@ -129,6 +141,17 @@ export async function confirmPurchase(
         [randomUUID(), userId, pay.itemId],
       );
     }
+    const item = await itemPrice(pay.itemType, pay.itemId);
+    receipt = {
+      userId,
+      paymentId: pay.id,
+      title: item?.title ?? (pay.itemType === "course" ? "Course" : "Question set"),
+      itemType: pay.itemType,
+      amountInr: pay.amountInr,
+      currency: "INR",
+      orderId: input.orderId,
+      providerPaymentId: input.paymentId,
+    };
   }
-  return { itemType: pay.itemType, itemId: pay.itemId };
+  return { itemType: pay.itemType, itemId: pay.itemId, receipt };
 }

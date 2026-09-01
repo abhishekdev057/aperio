@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createSession } from "@/lib/auth";
 import { syncAdminRole } from "@/lib/admin";
 import { logActivity, touchLastSeen } from "@/lib/activity";
 import { sendWelcomeEmail } from "@/lib/email";
+import { notifyAccountChange, recordLoginAndNotify } from "@/lib/security-emails";
 import { db, one, query } from "@/lib/db";
 import {
   OAUTH_STATE_COOKIE,
@@ -69,6 +70,7 @@ export async function GET(request: Request) {
 
   let userId: string;
   let isNewUser = false;
+  let linkedGoogle = false;
   try {
     const byGoogleId = await one<{ id: string }>("SELECT id FROM users WHERE google_id=$1", [profile.sub]);
     if (byGoogleId) {
@@ -78,6 +80,7 @@ export async function GET(request: Request) {
       const byEmail = await one<{ id: string }>("SELECT id FROM users WHERE email=$1", [email]);
       if (byEmail) {
         userId = byEmail.id;
+        linkedGoogle = true;
         await query(
           "UPDATE users SET google_id=$1, avatar_url=COALESCE($2,avatar_url), updated_at=now() WHERE id=$3",
           [profile.sub, picture, userId],
@@ -116,6 +119,26 @@ export async function GET(request: Request) {
     request,
   });
   if (isNewUser) void sendWelcomeEmail({ email, fullName });
+
+  const uid = userId;
+  after(async () => {
+    await recordLoginAndNotify({
+      userId: uid,
+      email,
+      fullName,
+      method: "Google",
+      request,
+      suppressNewDeviceAlert: isNewUser,
+    });
+    if (linkedGoogle) {
+      await notifyAccountChange({
+        userId: uid,
+        summary: "Google sign-in was linked",
+        detail: `Your Aperio account (${email}) can now be accessed with “Sign in with Google”.`,
+        request,
+      });
+    }
+  });
 
   return back(isNewUser ? "/onboarding" : "/overview");
 }

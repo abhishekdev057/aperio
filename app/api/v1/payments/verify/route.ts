@@ -1,6 +1,8 @@
+import { after } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { fail, handleApiError, ok } from "@/lib/api";
 import { confirmPurchase } from "@/lib/payments";
+import { sendPurchaseReceipt } from "@/lib/security-emails";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -15,7 +17,8 @@ export async function POST(request: Request) {
   try {
     const user = await requireUser();
     const input = schema.parse(await request.json());
-    const result = await confirmPurchase(user.id, input);
+    const { receipt, ...result } = await confirmPurchase(user.id, input);
+    if (receipt) after(() => sendPurchaseReceipt(receipt));
     return ok({ granted: true, ...result });
   } catch (error) {
     if (error instanceof Error) {

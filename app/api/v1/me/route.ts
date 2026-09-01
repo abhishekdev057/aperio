@@ -1,6 +1,8 @@
+import { after } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { handleApiError, ok } from "@/lib/api";
 import { one, query } from "@/lib/db";
+import { notifyAccountChange } from "@/lib/security-emails";
 import { profileSchema } from "@/lib/validation";
 
 export async function GET() {
@@ -20,7 +22,20 @@ export async function PATCH(request: Request) {
   try {
     const user = await requireUser();
     const input = profileSchema.parse(await request.json());
+    const nameChanged = Boolean(input.fullName && input.fullName !== user.fullName);
     if (input.fullName) await query("UPDATE users SET full_name=$1,updated_at=now() WHERE id=$2", [input.fullName, user.id]);
+    if (nameChanged) {
+      const from = user.fullName;
+      const to = input.fullName!;
+      after(() =>
+        notifyAccountChange({
+          userId: user.id,
+          summary: "Your name was changed",
+          detail: `The name on your Aperio account was changed from “${from}” to “${to}”.`,
+          request,
+        }),
+      );
+    }
     await query(
       `UPDATE profiles SET
         headline=COALESCE($1,headline),current_status=COALESCE($2,current_status),bio=COALESCE($3,bio),
