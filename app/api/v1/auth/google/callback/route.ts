@@ -14,9 +14,11 @@ import {
   googleRedirectUri,
   isGoogleEmailVerified,
   isGoogleOAuthConfigured,
+  verifyOAuthState,
 } from "@/lib/google";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 export async function GET(request: Request) {
@@ -26,18 +28,21 @@ export async function GET(request: Request) {
   const back = (path: string) => {
     const response = NextResponse.redirect(new URL(path, base));
     response.cookies.set(OAUTH_STATE_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+    response.headers.set("cache-control", "no-store");
     return response;
   };
 
   const cookieStore = await cookies();
-  const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
+  const stateCookie = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
 
   if (!isGoogleOAuthConfigured()) return back("/login?error=google_unavailable");
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   if (url.searchParams.get("error")) return back("/login?error=google_denied");
-  if (!code || !state || !expectedState || state !== expectedState) return back("/login?error=google_state");
+  // `state` is HMAC-signed, so a valid signature + fresh timestamp is enough on
+  // its own; the cookie is only enforced when it actually came back.
+  if (!code || !verifyOAuthState(state, stateCookie)) return back("/login?error=google_state");
 
   const redirectUri = googleRedirectUri(url.origin);
 
