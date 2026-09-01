@@ -1,5 +1,6 @@
 import "server-only";
 
+import { primaryOrigin } from "@/lib/origin";
 import { getIntegrationRuntime } from "@/lib/settings";
 
 export interface EmailConfig {
@@ -77,7 +78,7 @@ export async function sendEmail(
 
 // --- template kit ----------------------------------------------------------
 
-const APP_URL = process.env.APP_ORIGIN?.replace(/\/+$/, "") || "https://aperio-umber.vercel.app";
+const APP_URL = primaryOrigin("https://aperio-umber.vercel.app");
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 function shell(inner: string) {

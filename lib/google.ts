@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { resolveOrigin } from "@/lib/origin";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -22,21 +23,21 @@ export function isGoogleOAuthConfigured() {
 }
 
 /**
- * The single origin the whole OAuth round-trip must run on. Google redirects
- * back to APP_ORIGIN, so the state cookie has to be set on that same host —
- * otherwise the first attempt fails with `google_state` and only the retry
- * (which now starts on APP_ORIGIN) succeeds. Locally APP_ORIGIN is unset and we
- * fall back to the incoming request origin (http://localhost:3000).
+ * The origin the OAuth round-trip runs on for this request. `APP_ORIGIN` may be
+ * a comma-separated allowlist (e.g. the vercel.app host and a custom domain);
+ * any host in it runs its own flow, and anything else (a preview URL) is sent to
+ * the primary. Locally, with `APP_ORIGIN` unset, this is the request origin.
  */
 export function canonicalOrigin(requestOrigin: string) {
-  return (process.env.APP_ORIGIN?.trim() || requestOrigin).replace(/\/+$/, "");
+  return resolveOrigin(requestOrigin);
 }
 
 /**
- * The redirect URI must exactly match one registered in the Google Cloud console.
+ * The redirect URI must exactly match one registered in the Google Cloud
+ * console — register EVERY origin listed in `APP_ORIGIN`.
  */
 export function googleRedirectUri(requestOrigin: string) {
-  return `${canonicalOrigin(requestOrigin)}/api/v1/auth/google/callback`;
+  return `${resolveOrigin(requestOrigin)}/api/v1/auth/google/callback`;
 }
 
 // --- CSRF state ------------------------------------------------------------

@@ -19,11 +19,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/login?error=google_unavailable", canonical));
   }
 
-  // Google always redirects back to `canonical` (APP_ORIGIN), so build the whole
-  // flow on that host. If the user started somewhere else (a preview URL, a bare
-  // deployment URL, www vs apex), bounce to the canonical host first so the
-  // redirect_uri we hand Google matches the one it's registered with.
-  if (url.origin !== canonical && url.searchParams.get("canonical") !== "1") {
+  // Each origin in APP_ORIGIN runs its own flow (its callback URL must be
+  // registered with Google). Anything else — a preview URL, a bare deployment
+  // URL — is bounced to the primary origin first so the redirect_uri we hand
+  // Google is always one it recognises. (Locally, with APP_ORIGIN unset,
+  // canonical === url.origin, so this never fires.)
+  if (canonical !== url.origin && url.searchParams.get("canonical") !== "1") {
     const bounce = new URL("/api/v1/auth/google", canonical);
     bounce.searchParams.set("canonical", "1");
     return NextResponse.redirect(bounce);
