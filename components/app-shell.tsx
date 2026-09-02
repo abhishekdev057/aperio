@@ -11,6 +11,7 @@ import {
   FileSearch,
   GraduationCap,
   History,
+  LayoutGrid,
   LibraryBig,
   LoaderCircle,
   LogOut,
@@ -31,6 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const nav = [
   { href: "/overview", label: "Overview", icon: ChartNoAxesCombined },
@@ -49,7 +51,7 @@ const account = [
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-const mobile = [nav[0], nav[1], nav[2], nav[3], account[0]];
+const mobilePrimary = [nav[0], nav[1], nav[2], nav[3]] as const;
 
 function NavLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: typeof Target; active: boolean }) {
   return (
@@ -68,6 +70,7 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
   const accountItems = user.role === "admin" ? [...account, { href: "/admin", label: "Admin", icon: Shield }] : account;
   const allItems = [...nav, ...accountItems];
   const current = allItems.find((item) => pathname.startsWith(item.href));
+  const moreActive = !mobilePrimary.some((item) => pathname.startsWith(item.href));
   const initial = user.fullName.trim().charAt(0).toUpperCase() || "A";
 
   async function logout() {
@@ -84,6 +87,7 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
 
   return (
     <div className="min-h-[100dvh] lg:grid lg:grid-cols-[238px_minmax(0,1fr)]">
+      <a href="#main-content" className="skip-link">Skip to content</a>
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[238px] flex-col border-r bg-[color-mix(in_srgb,var(--surface)_94%,var(--background))] px-4 pb-4 pt-5 lg:flex">
         <div className="px-2"><AperioBrand href="/overview" /></div>
         <nav className="mt-8 space-y-1" aria-label="Primary navigation">
@@ -157,15 +161,44 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
             </DropdownMenu>
           </div>
         </header>
-        <main>{children}</main>
+        <main id="main-content" tabIndex={-1} className="outline-none">{children}</main>
       </section>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-[var(--surface-glass)] px-1 pb-[max(7px,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">
-        {mobile.map(({ href, label, icon: Icon, ...item }) => {
+        {mobilePrimary.map(({ href, label, icon: Icon, ...item }) => {
           const active = pathname.startsWith(href);
           const mobileLabel = "mobileLabel" in item ? item.mobileLabel : label;
           return <Link key={href} href={href} aria-current={active ? "page" : undefined} className={cn("relative flex min-w-0 flex-col items-center gap-1 rounded-[9px] py-1.5 text-[10px] font-medium transition", active ? "text-[var(--primary)]" : "text-[var(--muted)]")}><span className={cn("grid size-7 place-items-center rounded-[8px]", active && "bg-[var(--primary-soft)]")}><Icon size={17} strokeWidth={active ? 2.2 : 1.8} /></span><span className="truncate">{mobileLabel}</span></Link>;
         })}
+        <Sheet>
+          <SheetTrigger className={cn("relative flex min-w-0 flex-col items-center gap-1 rounded-[9px] py-1.5 text-[10px] font-medium text-[var(--muted)] transition", moreActive && "text-[var(--primary)]")} aria-label="More navigation">
+            <span className={cn("grid size-7 place-items-center rounded-[8px]", moreActive && "bg-[var(--primary-soft)]")}><LayoutGrid size={17} strokeWidth={moreActive ? 2.2 : 1.8} /></span>
+            <span className="truncate">More</span>
+          </SheetTrigger>
+          <SheetContent title="All sections">
+            <p className="pr-10 text-[15px] font-semibold tracking-[-.01em]">All sections</p>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {allItems.map(({ href, label, icon: Icon }) => {
+                const active = pathname.startsWith(href);
+                return (
+                  <SheetClose asChild key={href}>
+                    <Link href={href} aria-current={active ? "page" : undefined} className={cn("flex flex-col items-center gap-2 rounded-[12px] border p-3 text-center text-[11px] font-medium transition", active ? "border-transparent bg-[var(--primary-soft)] text-[var(--primary-strong)]" : "text-[var(--muted-strong)] hover:bg-[var(--surface-muted)]")}>
+                      <Icon size={18} />
+                      <span className="truncate">{label}</span>
+                    </Link>
+                  </SheetClose>
+                );
+              })}
+            </div>
+            <div className="mt-5 flex items-center gap-2 border-t pt-4">
+              <ThemeToggle className="flex-1" showLabel />
+            </div>
+            <button onClick={logout} disabled={signingOut} className="mt-2 flex h-10 w-full items-center gap-2.5 rounded-[9px] px-3 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--critical-soft)] hover:text-[var(--critical)] disabled:opacity-60">
+              {signingOut ? <LoaderCircle size={15} className="animate-spin" /> : <LogOut size={15} />}
+              {signingOut ? "Signing out…" : "Sign out"}
+            </button>
+          </SheetContent>
+        </Sheet>
       </nav>
     </div>
   );

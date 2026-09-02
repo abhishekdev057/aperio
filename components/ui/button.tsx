@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
@@ -13,8 +14,28 @@ const buttonVariants = cva(
   }, size: { sm: "h-9 px-3 text-xs", md: "h-10 px-4", lg: "h-11 px-5" } }, defaultVariants: { variant: "primary", size: "md" } },
 );
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> { asChild?: boolean; }
-export function Button({ className, variant, size, asChild, ...props }: ButtonProps) {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
+  loading?: boolean;
+}
+
+export function Button({ className, variant, size, asChild, loading, disabled, children, ...props }: ButtonProps) {
   const Comp = asChild ? Slot : "button";
-  return <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+  // Slot requires a single child, so only decorate the plain <button> form.
+  const content = !asChild && loading ? (
+    <>
+      <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
+      {children}
+    </>
+  ) : children;
+  return (
+    <Comp
+      className={cn(buttonVariants({ variant, size }), className)}
+      disabled={asChild ? disabled : disabled || loading}
+      aria-busy={loading || undefined}
+      {...props}
+    >
+      {content}
+    </Comp>
+  );
 }
