@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronLeft, Loader, LoaderCircle, Lock, Trophy, X } from "lucide-react";
 import { purchaseItem } from "@/components/razorpay-checkout";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,19 @@ function Runner({ set, onClose, onScored }: { set: SetRow; onClose: () => void; 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+    panelRef.current?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose]);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,18 +83,26 @@ function Runner({ set, onClose, onScored }: { set: SetRow; onClose: () => void; 
   const answeredAll = questions ? questions.every((q) => answers[q.id] !== undefined) : false;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8">
-      <div className="w-full max-w-2xl rounded-[18px] border bg-[var(--surface)] p-5 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={onClose}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quiz-runner-title"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl rounded-[18px] border bg-[var(--surface)] p-5 shadow-xl outline-none"
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold text-[var(--primary)]">{set.niche} · {set.level}</p>
-            <h2 className="mt-1 text-lg font-semibold">{set.title}</h2>
+            <h2 id="quiz-runner-title" className="mt-1 text-lg font-semibold">{set.title}</h2>
           </div>
-          <button onClick={onClose} className="grid size-8 place-items-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface-muted)]"><X size={16} /></button>
+          <button type="button" onClick={onClose} aria-label="Close quiz" className="grid size-8 place-items-center rounded-[9px] text-[var(--muted)] hover:bg-[var(--surface-muted)]"><X size={16} /></button>
         </div>
 
-        {loading && <div className="py-16 text-center"><LoaderCircle size={20} className="mx-auto animate-spin text-[var(--muted)]" /></div>}
-        {error && <p className="mt-3 text-sm text-[var(--critical)]">{error}</p>}
+        {loading && <div className="py-16 text-center"><LoaderCircle size={20} className="mx-auto animate-spin text-[var(--muted)]" /><span className="sr-only">Loading questions…</span></div>}
+        {error && <p role="alert" className="mt-3 text-sm text-[var(--critical)]">{error}</p>}
 
         {!loading && result && (
           <div className="mt-4">
@@ -116,8 +137,9 @@ function Runner({ set, onClose, onScored }: { set: SetRow; onClose: () => void; 
               ))}
             </div>
             <div className="mt-4 flex gap-2">
-              <button onClick={onClose} className="rounded-[10px] border px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"><ChevronLeft size={14} className="mr-1 inline" />Done</button>
+              <button type="button" onClick={onClose} className="rounded-[10px] border px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"><ChevronLeft size={14} className="mr-1 inline" />Done</button>
               <button
+                type="button"
                 onClick={() => { setResult(null); setAnswers({}); }}
                 className="rounded-[10px] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white"
               >
@@ -132,11 +154,14 @@ function Runner({ set, onClose, onScored }: { set: SetRow; onClose: () => void; 
             <div className="space-y-4">
               {questions.map((q, i) => (
                 <div key={q.id}>
-                  <p className="text-sm font-medium">{i + 1}. {q.prompt}</p>
-                  <div className="mt-2 space-y-1.5">
+                  <p className="text-sm font-medium" id={`q-${q.id}`}>{i + 1}. {q.prompt}</p>
+                  <div className="mt-2 space-y-1.5" role="radiogroup" aria-labelledby={`q-${q.id}`}>
                     {q.options.map((o, j) => (
                       <button
                         key={j}
+                        type="button"
+                        role="radio"
+                        aria-checked={answers[q.id] === j}
                         onClick={() => setAnswers((a) => ({ ...a, [q.id]: j }))}
                         className={cn(
                           "flex w-full items-center gap-2 rounded-[9px] border px-3 py-2 text-left text-sm transition",
@@ -155,11 +180,14 @@ function Runner({ set, onClose, onScored }: { set: SetRow; onClose: () => void; 
             </div>
             <div className="sticky bottom-0 mt-5 flex items-center gap-3 bg-[var(--surface)] pt-3">
               <button
+                type="button"
                 onClick={submit}
                 disabled={!answeredAll || submitting}
-                className="rounded-[10px] bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                aria-busy={submitting}
+                className="inline-flex items-center gap-2 rounded-[10px] bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {submitting ? <LoaderCircle size={14} className="animate-spin" /> : `Submit ${questions.length} answers`}
+                {submitting && <LoaderCircle size={14} className="animate-spin" />}
+                {submitting ? "Scoring…" : `Submit ${questions.length} answers`}
               </button>
               {!answeredAll && <span className="text-xs text-[var(--muted)]">Answer every question to submit.</span>}
             </div>
