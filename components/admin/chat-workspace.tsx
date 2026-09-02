@@ -102,7 +102,7 @@ function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void 
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/85 backdrop-blur-sm" onClick={onClose}>
+    <div role="dialog" aria-modal="true" aria-label={`Preview: ${preview.name}`} className="fixed inset-0 z-50 flex flex-col bg-black/85 backdrop-blur-sm" onClick={onClose}>
       <div className="flex items-center justify-between px-5 py-3 text-white">
         <span className="truncate text-sm font-medium">{preview.name}</span>
         <div className="flex items-center gap-2">
@@ -114,7 +114,7 @@ function Lightbox({ preview, onClose }: { preview: Preview; onClose: () => void 
           >
             <Download size={14} />Download
           </a>
-          <button onClick={onClose} className="grid size-8 place-items-center rounded-[9px] hover:bg-white/15"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Close preview" className="grid size-8 place-items-center rounded-[9px] hover:bg-white/15"><X size={18} /></button>
         </div>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
@@ -340,7 +340,7 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
           <div className="flex items-center gap-1.5 border-b p-2">
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="h-9 pl-9 text-xs" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" aria-label="Search people" className="h-9 pl-9 text-xs" />
             </div>
             <button onClick={openComposer} title="New message" className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-[var(--primary)] text-white">
               <Plus size={16} />
@@ -488,10 +488,10 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
                 )}
 
                 <div className="flex items-end gap-2">
-                  <button onClick={() => fileRef.current?.click()} className="grid size-10 shrink-0 place-items-center rounded-[10px] border text-[var(--muted)] hover:text-[var(--foreground)]" title="Attach">
+                  <button type="button" onClick={() => fileRef.current?.click()} className="grid size-10 shrink-0 place-items-center rounded-[10px] border text-[var(--muted)] hover:text-[var(--foreground)]" title="Attach" aria-label="Attach a file">
                     <Paperclip size={16} />
                   </button>
-                  <button onClick={() => setPollOpen((v) => !v)} className={cn("grid size-10 shrink-0 place-items-center rounded-[10px] border", pollOpen ? "border-[var(--primary)] text-[var(--primary)]" : "text-[var(--muted)] hover:text-[var(--foreground)]")} title="Poll">
+                  <button type="button" onClick={() => setPollOpen((v) => !v)} aria-pressed={pollOpen} className={cn("grid size-10 shrink-0 place-items-center rounded-[10px] border", pollOpen ? "border-[var(--primary)] text-[var(--primary)]" : "text-[var(--muted)] hover:text-[var(--foreground)]")} title="Poll" aria-label="Create a poll">
                     <BarChart3 size={16} />
                   </button>
                   <input
@@ -512,9 +512,10 @@ export function ChatWorkspace({ initialThreads, telegramReady, whatsappReady }: 
                     }}
                     rows={1}
                     placeholder="Type a message…"
+                    aria-label="Message"
                     className="max-h-32 min-h-10 flex-1 resize-none rounded-[10px] border bg-[var(--surface)] px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)]"
                   />
-                  <button onClick={() => send()} disabled={sending || (!draft.trim())} className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-[var(--primary)] text-white disabled:opacity-50">
+                  <button type="button" onClick={() => send()} disabled={sending || (!draft.trim())} aria-label="Send message" className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-[var(--primary)] text-white disabled:opacity-50">
                     {sending ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
                   </button>
                 </div>
