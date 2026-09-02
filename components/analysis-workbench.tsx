@@ -69,6 +69,7 @@ export function AnalysisWorkbench({ roles, initialResumes, initialRoleId }: { ro
   const [analyzing, setAnalyzing] = useState(false);
   const [stage, setStage] = useState(0);
   const [error, setError] = useState("");
+  const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
     if (!analyzing) return;
@@ -82,8 +83,19 @@ export function AnalysisWorkbench({ roles, initialResumes, initialRoleId }: { ro
     return () => window.clearInterval(timer);
   }, [uploading]);
 
+  const MAX_BYTES = 5 * 1024 * 1024;
+  const ALLOWED = /\.(pdf|docx|jpe?g|png|webp)$/i;
+
   async function upload(file?: File) {
     if (!file) return;
+    if (!ALLOWED.test(file.name)) {
+      setError("Unsupported file type. Use PDF, DOCX, JPG, PNG, or WebP.");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setError(`That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 5 MB.`);
+      return;
+    }
     setUploading(true);
     setUploadStage(0);
     setError("");
@@ -209,7 +221,7 @@ export function AnalysisWorkbench({ roles, initialResumes, initialRoleId }: { ro
             <button type="button" onClick={() => inputRef.current?.click()} className="mt-4 text-xs font-semibold text-[var(--primary)]">Replace resume</button>
           </div>
         ) : (
-          <button type="button" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); upload(event.dataTransfer.files?.[0]); }} className="group mt-7 flex w-full flex-col items-center rounded-[16px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-elevated)] px-5 py-8 text-center transition hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]"><span className="grid size-11 place-items-center rounded-[12px] bg-[var(--primary-soft)] text-[var(--primary)] transition group-hover:bg-[var(--surface)]"><UploadCloud size={20} /></span><span className="mt-4 text-sm font-semibold">Drop your resume here</span><span className="mt-1 text-xs text-[var(--muted)]">or click to browse · PDF, DOCX, JPG, PNG, WebP · 5 MB max</span><span className="mt-4 inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted-strong)]"><ScanLine size={13} />Scans and image-based resumes supported</span></button>
+          <button type="button" onClick={() => inputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); setDragActive(true); }} onDragLeave={() => setDragActive(false)} onDrop={(event) => { event.preventDefault(); setDragActive(false); upload(event.dataTransfer.files?.[0]); }} className={cn("group mt-7 flex w-full flex-col items-center rounded-[16px] border border-dashed px-5 py-8 text-center transition hover:border-[var(--primary)] hover:bg-[var(--primary-soft)]", dragActive ? "border-[var(--primary)] bg-[var(--primary-soft)] ring-2 ring-[color-mix(in_srgb,var(--primary)_20%,transparent)]" : "border-[var(--border-strong)] bg-[var(--surface-elevated)]")}><span className="grid size-11 place-items-center rounded-[12px] bg-[var(--primary-soft)] text-[var(--primary)] transition group-hover:bg-[var(--surface)]"><UploadCloud size={20} /></span><span className="mt-4 text-sm font-semibold">Drop your resume here</span><span className="mt-1 text-xs text-[var(--muted)]">or click to browse · PDF, DOCX, JPG, PNG, WebP · 5 MB max</span><span className="mt-4 inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted-strong)]"><ScanLine size={13} />Scans and image-based resumes supported</span></button>
         )}
 
         {resumes.length > 1 && !uploading && <label className="mt-4 block"><span className="mb-2 block text-xs font-medium text-[var(--muted)]">Previously verified resumes</span><select value={resumeId} onChange={(event) => setResumeId(event.target.value)} className="h-10 w-full rounded-[9px] border bg-[var(--surface)] px-3 text-xs"><option value="">Use profile only</option>{resumes.map((resume) => <option key={resume.id} value={resume.id}>{resume.filename}</option>)}</select></label>}

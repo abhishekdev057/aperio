@@ -112,7 +112,7 @@ export function OverviewDashboard({ report, roadmapItems, history }: { report: A
         <section className="aperio-panel overflow-hidden">
           <PanelHeader icon={Target} title="Skill Coverage" />
           <div className="p-5 sm:p-6">
-            <div className="flex h-9 overflow-hidden rounded-[7px] bg-[var(--surface-muted)] text-[11px] font-semibold text-white" aria-label={`${coverage.strong}% strong match, ${coverage.developing}% developing, ${coverage.missing}% missing`}>
+            <div role="img" className="flex h-9 overflow-hidden rounded-[7px] bg-[var(--surface-muted)] text-[11px] font-semibold text-white" aria-label={`${coverage.strong}% strong match, ${coverage.developing}% developing, ${coverage.missing}% missing`}>
               {coverage.strong > 0 && <div className="grid place-items-center bg-[var(--positive)]" style={{ width: `${coverage.strong}%` }}>{coverage.strong >= 12 && `${coverage.strong}%`}</div>}
               {coverage.missing > 0 && <div className="grid place-items-center bg-[var(--attention)]" style={{ width: `${coverage.missing}%` }}>{coverage.missing >= 12 && `${coverage.missing}%`}</div>}
               {coverage.developing > 0 && <div className="grid place-items-center bg-[var(--primary)]" style={{ width: `${coverage.developing}%` }}>{coverage.developing >= 12 && `${coverage.developing}%`}</div>}
