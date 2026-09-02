@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, LoaderCircle, MailCheck } from "lucide-react";
+import { ArrowRight, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -82,15 +82,9 @@ export function ForgotPasswordForm() {
           <Input name="email" type="email" autoComplete="email" required placeholder="you@example.com" disabled={loading} />
         </label>
 
-        <Button className="mt-1 w-full" size="lg" disabled={loading}>
-          {loading ? (
-            <LoaderCircle size={16} className="animate-spin" />
-          ) : (
-            <>
-              Send reset link
-              <ArrowRight size={16} />
-            </>
-          )}
+        <Button className="mt-1 w-full" size="lg" loading={loading}>
+          Send reset link
+          {!loading && <ArrowRight size={16} />}
         </Button>
 
         <p className="pt-1 text-center text-[13px] text-[var(--muted)]">

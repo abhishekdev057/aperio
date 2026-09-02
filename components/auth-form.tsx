@@ -122,15 +122,9 @@ export function AuthForm({ mode, oauthError }: { mode: "login" | "register"; oau
           />
         </label>
 
-        <Button className="mt-1 w-full" size="lg" disabled={busy}>
-          {loading ? (
-            <LoaderCircle size={16} className="animate-spin" />
-          ) : (
-            <>
-              {mode === "register" ? "Create account" : "Sign in"}
-              <ArrowRight size={16} />
-            </>
-          )}
+        <Button className="mt-1 w-full" size="lg" loading={loading} disabled={busy}>
+          {mode === "register" ? "Create account" : "Sign in"}
+          {!loading && <ArrowRight size={16} />}
         </Button>
 
         <p className="pt-1 text-center text-[13px] text-[var(--muted)]">

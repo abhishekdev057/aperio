@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowRight, CheckCircle2, LoaderCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -105,15 +105,9 @@ export function ResetPasswordForm({ token }: { token: string }) {
           />
         </label>
 
-        <Button className="mt-1 w-full" size="lg" disabled={loading}>
-          {loading ? (
-            <LoaderCircle size={16} className="animate-spin" />
-          ) : (
-            <>
-              Update password
-              <ArrowRight size={16} />
-            </>
-          )}
+        <Button className="mt-1 w-full" size="lg" loading={loading}>
+          Update password
+          {!loading && <ArrowRight size={16} />}
         </Button>
 
         <p className="pt-1 text-center text-[13px] text-[var(--muted)]">
