@@ -60,16 +60,25 @@ export function LearningPathView({ initialPath }: { initialPath: Path | null }) 
   async function cycle(module: Module) {
     const next = module.status === "not_started" ? "in_progress" : module.status === "in_progress" ? "completed" : "not_started";
     setSavingId(module.id);
-    const res = await fetch(`/api/v1/learning-paths/modules/${module.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status: next }),
-    });
-    if (res.ok && path) {
-      setPath({ ...path, modules: path.modules.map((m) => (m.id === module.id ? { ...m, status: next } : m)) });
+    setError("");
+    try {
+      const res = await fetch(`/api/v1/learning-paths/modules/${module.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      if (path) {
+        setPath({ ...path, modules: path.modules.map((m) => (m.id === module.id ? { ...m, status: next } : m)) });
+      }
+    } catch {
+      setError(`Couldn’t update “${module.title}”. Try again.`);
+    } finally {
+      setSavingId("");
     }
-    setSavingId("");
   }
+
+  const statusLabel = { not_started: "Not started", in_progress: "In progress", completed: "Completed" } as const;
 
   const hoursPicker = (
     <label className="flex items-center gap-2 text-xs font-medium text-[var(--muted)]">
@@ -130,12 +139,14 @@ export function LearningPathView({ initialPath }: { initialPath: Path | null }) 
           <article key={module.id} className="rounded-[16px] border bg-[var(--surface)] p-5">
             <div className="flex items-start gap-4">
               <button
+                type="button"
                 onClick={() => cycle(module)}
+                disabled={savingId === module.id}
                 className={cn(
-                  "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full",
+                  "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full transition-colors disabled:opacity-60",
                   module.status === "completed" ? "bg-[var(--positive)] text-white" : module.status === "in_progress" ? "bg-[var(--primary-soft)] text-[var(--primary)]" : "border text-[var(--muted)]",
                 )}
-                aria-label={`Change status for ${module.title}`}
+                aria-label={`${module.title}: ${statusLabel[module.status]}. Activate to move to next status.`}
               >
                 {savingId === module.id ? <LoaderCircle size={15} className="animate-spin" /> : module.status === "completed" ? <Check size={16} /> : module.status === "in_progress" ? <PlayCircle size={16} /> : <Circle size={14} />}
               </button>

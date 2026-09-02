@@ -67,9 +67,9 @@ export function JobsBoard({ initial }: { initial: { jobs: Job[]; total: number; 
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 rounded-[10px] border bg-[var(--surface)] p-1 text-xs font-medium">
+        <div role="group" aria-label="Match scope" className="flex gap-1 rounded-[10px] border bg-[var(--surface)] p-1 text-xs font-medium">
           {scopes.map((s) => (
-            <button key={s.key} onClick={() => setScope(s.key)} className={cn("rounded-[7px] px-2.5 py-1", scope === s.key ? "bg-[var(--primary-soft)] text-[var(--primary-strong)]" : "text-[var(--muted)]")}>
+            <button key={s.key} type="button" aria-pressed={scope === s.key} onClick={() => setScope(s.key)} className={cn("rounded-[7px] px-2.5 py-1 transition-colors", scope === s.key ? "bg-[var(--primary-soft)] text-[var(--primary-strong)]" : "text-[var(--muted)] hover:text-[var(--foreground)]")}>
               {s.label}
             </button>
           ))}
@@ -80,13 +80,13 @@ export function JobsBoard({ initial }: { initial: { jobs: Job[]; total: number; 
         </label>
         <div className="relative flex-1 sm:max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-          {loading && <LoaderCircle size={13} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--muted)]" />}
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Title, company, location" className="h-9 pl-9 text-xs" />
+          {loading && <LoaderCircle size={13} aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--muted)]" />}
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Title, company, location" aria-label="Search jobs by title, company, or location" className="h-9 pl-9 text-xs" />
         </div>
-        <span className="text-xs text-[var(--muted)]">{data.total} matches</span>
+        <span className="text-xs text-[var(--muted)]" aria-live="polite">{data.total} matches</span>
       </div>
 
-      <div className="mt-5 grid gap-3">
+      <div className="mt-5 grid gap-3" aria-busy={loading}>
         {data.jobs.map((job) => (
           <article key={job.id} className="rounded-[16px] border bg-[var(--surface)] p-5">
             <div className="flex items-start justify-between gap-3">

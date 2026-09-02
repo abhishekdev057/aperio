@@ -47,14 +47,23 @@ export function PracticeBoard({ initial }: { initial: { sessions: Session[]; sug
   async function cycle(session: Session) {
     const next = session.status === "not_started" ? "in_progress" : session.status === "in_progress" ? "completed" : "not_started";
     setBusy(session.id);
-    const res = await fetch(`/api/v1/practice/${session.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status: next }),
-    });
-    if (res.ok) setSessions((s) => s.map((x) => (x.id === session.id ? { ...x, status: next } : x)));
-    setBusy("");
+    setError("");
+    try {
+      const res = await fetch(`/api/v1/practice/${session.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      setSessions((s) => s.map((x) => (x.id === session.id ? { ...x, status: next } : x)));
+    } catch {
+      setError(`Couldn’t update “${session.title}”. Try again.`);
+    } finally {
+      setBusy("");
+    }
   }
+
+  const statusLabel = { not_started: "Not started", in_progress: "In progress", completed: "Completed" } as const;
 
   return (
     <div>
@@ -91,12 +100,14 @@ export function PracticeBoard({ initial }: { initial: { sessions: Session[]; sug
           <article key={session.id} className="rounded-[16px] border bg-[var(--surface)] p-5">
             <div className="flex items-start gap-4">
               <button
+                type="button"
                 onClick={() => cycle(session)}
+                disabled={busy === session.id}
                 className={cn(
-                  "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full",
+                  "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full transition-colors disabled:opacity-60",
                   session.status === "completed" ? "bg-[var(--positive)] text-white" : session.status === "in_progress" ? "bg-[var(--primary-soft)] text-[var(--primary)]" : "border text-[var(--muted)]",
                 )}
-                aria-label="Change status"
+                aria-label={`${session.title}: ${statusLabel[session.status]}. Activate to move to next status.`}
               >
                 {busy === session.id ? <LoaderCircle size={15} className="animate-spin" /> : session.status === "completed" ? <Check size={16} /> : session.status === "in_progress" ? <PlayCircle size={16} /> : <Circle size={14} />}
               </button>

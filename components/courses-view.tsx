@@ -15,13 +15,19 @@ function LessonList({ courseId }: { courseId: string }) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState("");
 
+  const [loadError, setLoadError] = useState(false);
+
   async function load() {
     if (lessons) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await fetch(`/api/v1/courses/${courseId}`);
       const json = await res.json();
-      if (res.ok) setLessons(json.data.lessons ?? []);
+      if (!res.ok) throw new Error("load failed");
+      setLessons(json.data.lessons ?? []);
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -30,33 +36,48 @@ function LessonList({ courseId }: { courseId: string }) {
   async function toggle(lesson: Lesson) {
     const next = lesson.status === "completed" ? "not_started" : lesson.status === "not_started" ? "in_progress" : "completed";
     setBusy(lesson.id);
-    const res = await fetch(`/api/v1/courses/lessons/${lesson.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status: next }),
-    });
-    if (res.ok) setLessons((ls) => ls?.map((l) => (l.id === lesson.id ? { ...l, status: next } : l)) ?? null);
-    setBusy("");
+    try {
+      const res = await fetch(`/api/v1/courses/lessons/${lesson.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      setLessons((ls) => ls?.map((l) => (l.id === lesson.id ? { ...l, status: next } : l)) ?? null);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setBusy("");
+    }
   }
+
+  const statusLabel = { not_started: "Not started", in_progress: "In progress", completed: "Completed" } as const;
 
   return (
     <details className="mt-3" onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && load()}>
       <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-[var(--primary)]"><ChevronDown size={13} />Lessons</summary>
       {loading && <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--muted)]"><LoaderCircle size={12} className="animate-spin" />Loading…</p>}
+      {loadError && <p role="alert" className="mt-2 text-xs text-[var(--critical)]">Couldn’t load lessons. Close and reopen to retry.</p>}
       {lessons && (
         <ol className="mt-2 space-y-1.5">
           {lessons.map((l) => (
-            <li key={l.id}>
-              <button onClick={() => toggle(l)} className="flex w-full items-start gap-2.5 rounded-[9px] border p-2.5 text-left text-sm hover:bg-[var(--surface-elevated)]">
-                <span className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-full", l.status === "completed" ? "bg-[var(--positive)] text-white" : l.status === "in_progress" ? "bg-[var(--primary-soft)] text-[var(--primary)]" : "border text-[var(--muted)]")}>
+            <li key={l.id} className="rounded-[9px] border p-2.5 text-sm">
+              <div className="flex items-start gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => toggle(l)}
+                  disabled={busy === l.id}
+                  aria-label={`${l.title}: ${statusLabel[l.status as keyof typeof statusLabel] ?? l.status}. Activate to change.`}
+                  className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-full transition-colors disabled:opacity-60", l.status === "completed" ? "bg-[var(--positive)] text-white" : l.status === "in_progress" ? "bg-[var(--primary-soft)] text-[var(--primary)]" : "border text-[var(--muted)]")}
+                >
                   {busy === l.id ? <LoaderCircle size={11} className="animate-spin" /> : l.status === "completed" ? <Check size={12} /> : l.status === "in_progress" ? <PlayCircle size={12} /> : <Circle size={10} />}
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-medium">{l.title} <span className="text-[10px] font-normal text-[var(--muted)]">· {l.kind}{l.durationMin ? ` · ${l.durationMin}m` : ""}</span></span>
-                  {l.content && <span className="mt-0.5 block whitespace-pre-wrap text-xs leading-5 text-[var(--muted)]">{l.content}</span>}
-                  {l.resourceUrl && <a href={l.resourceUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="mt-1 inline-block text-xs font-medium text-[var(--primary)]">Open resource</a>}
-                </span>
-              </button>
+                </button>
+                <div className="min-w-0">
+                  <p className="font-medium">{l.title} <span className="text-[10px] font-normal text-[var(--muted)]">· {l.kind}{l.durationMin ? ` · ${l.durationMin}m` : ""}</span></p>
+                  {l.content && <p className="mt-0.5 whitespace-pre-wrap text-xs leading-5 text-[var(--muted)]">{l.content}</p>}
+                  {l.resourceUrl && <a href={l.resourceUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-medium text-[var(--primary)] hover:underline">Open resource</a>}
+                </div>
+              </div>
             </li>
           ))}
           {!lessons.length && <li className="text-xs text-[var(--muted)]">No lessons yet.</li>}

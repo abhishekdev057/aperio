@@ -109,7 +109,14 @@ export function AssessmentRunner({ assessment }: { assessment: Assessment }) {
         <p className="text-xs font-semibold uppercase tracking-[.14em] text-[var(--primary)]">Optional skills check</p>
         <h1 className="mt-1.5 text-xl font-semibold tracking-tight">{assessment.roleTitle ?? "Your skills"} — quick verification</h1>
         <p className="mt-1.5 text-sm text-[var(--muted)]">{total} questions. Your answers set a verified level for each skill, which the analyzer trusts above résumé inference.</p>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+        <div
+          className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)]"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={answered}
+          aria-label={`${answered} of ${total} questions answered`}
+        >
           <div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${(answered / total) * 100}%` }} />
         </div>
       </div>
@@ -122,13 +129,15 @@ export function AssessmentRunner({ assessment }: { assessment: Assessment }) {
               {questions.map((q) => (
                 <fieldset key={q.id} className="rounded-[14px] border bg-[var(--surface)] p-4">
                   <legend className="mb-2 text-sm font-medium">{q.prompt}</legend>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5" role="radiogroup" aria-label={q.prompt}>
                     {q.options.map((opt, i) => {
                       const chosen = answers[q.id] === i;
                       return (
                         <button
                           key={i}
                           type="button"
+                          role="radio"
+                          aria-checked={chosen}
                           onClick={() => setAnswers((a) => ({ ...a, [q.id]: i }))}
                           className={cn(
                             "flex w-full items-center gap-2.5 rounded-[10px] border px-3 py-2 text-left text-sm transition",
