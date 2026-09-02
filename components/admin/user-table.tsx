@@ -36,12 +36,12 @@ export function UserTable({ initial }: { initial: { rows: Row[]; total: number }
         </div>
         <div className="relative w-full max-w-xs">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-          {loading && <LoaderCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--muted)]" />}
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email" className="pl-9" />
+          {loading && <LoaderCircle size={14} aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--muted)]" />}
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email" aria-label="Search users by name or email" className="pl-9" />
         </div>
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-[14px] border bg-[var(--surface)]">
+      <div className="mt-5 overflow-hidden rounded-[14px] border bg-[var(--surface)]" aria-busy={loading}>
         <div className="hidden grid-cols-[1.6fr_1fr_repeat(4,minmax(0,64px))_auto] gap-3 border-b bg-[var(--surface-elevated)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] lg:grid">
           <span>User</span><span>Last seen</span><span className="text-right">Anlys</span><span className="text-right">CVs</span><span className="text-right">Plans</span><span className="text-right">Chans</span><span />
         </div>

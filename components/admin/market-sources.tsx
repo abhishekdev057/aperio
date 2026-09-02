@@ -53,7 +53,7 @@ function SourceRow({
         <Button size="sm" onClick={onSave} disabled={saving || !String(row.name ?? "").trim()}>
           {saving ? <LoaderCircle size={13} className="animate-spin" /> : isDraft ? <Plus size={13} /> : <Check size={13} />}
         </Button>
-        {!isDraft && onRemove && <button onClick={onRemove} className="grid size-8 place-items-center rounded-[8px] text-[var(--muted)] hover:text-[var(--critical)]"><Trash2 size={13} /></button>}
+        {!isDraft && onRemove && <button type="button" onClick={onRemove} aria-label={`Remove ${String(row.name ?? "source")}`} className="grid size-8 place-items-center rounded-[8px] text-[var(--muted)] hover:text-[var(--critical)]"><Trash2 size={13} /></button>}
       </div>
     </div>
   );
@@ -108,9 +108,15 @@ export function MarketSources({ initial }: { initial: { sources: Source[]; integ
     }
   }
 
-  async function remove(id: string) {
-    await fetch(`/api/v1/admin/market/sources/${id}`, { method: "DELETE" });
+  async function remove(id: string, name: string) {
+    if (!window.confirm(`Remove the “${name}” job source?`)) return;
+    const prev = sources;
     setSources((s) => s.filter((x) => x.id !== id));
+    const res = await fetch(`/api/v1/admin/market/sources/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setSources(prev);
+      setError("Couldn’t remove that source. Try again.");
+    }
   }
 
   const t = stats?.totals;
@@ -162,7 +168,7 @@ export function MarketSources({ initial }: { initial: { sources: Source[]; integ
             saving={saving}
             onChange={(patch) => setSources((list) => list.map((x) => (x.id === s.id ? { ...x, ...patch } : x)))}
             onSave={() => save(s)}
-            onRemove={() => remove(String(s.id))}
+            onRemove={() => remove(String(s.id), String(s.name ?? "this source"))}
           />
         ))}
         <SourceRow

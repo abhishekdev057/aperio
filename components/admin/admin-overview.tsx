@@ -46,7 +46,7 @@ export function AdminOverview({ data }: { data: Overview }) {
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div className="rounded-[16px] border bg-[var(--surface)] p-5">
           <p className="text-sm font-semibold">Last 14 days</p>
-          <div className="mt-4 h-[220px]">
+          <div className="mt-4 h-[220px]" role="img" aria-label="Signups, analyses, and total events per day over the last 14 days">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data.daily} margin={{ left: -18, right: 6, top: 6 }}>
                 <defs>
@@ -74,7 +74,7 @@ export function AdminOverview({ data }: { data: Overview }) {
 
         <div className="rounded-[16px] border bg-[var(--surface)] p-5">
           <p className="text-sm font-semibold">Top actions (7d)</p>
-          <div className="mt-4 h-[220px]">
+          <div className="mt-4 h-[220px]" role="img" aria-label={`Most frequent actions in the last 7 days${data.topActions.length ? `: ${data.topActions.slice(0, 3).map((a) => `${a.action}, ${a.count}`).join("; ")}` : ""}`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.topActions} layout="vertical" margin={{ left: 40, right: 10 }}>
                 <XAxis type="number" hide allowDecimals={false} />

@@ -104,9 +104,15 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
     });
   }
 
-  async function remove(id: string) {
+  async function remove(id: string, title: string) {
+    if (!window.confirm(`Delete “${title}”? This removes it from every user's Practice page and can't be undone.`)) return;
+    const prev = sets;
     setSets((s) => s.filter((x) => x.id !== id));
-    await fetch(`/api/v1/admin/question-sets/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/admin/question-sets/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setSets(prev);
+      setError("Couldn’t delete that set. Try again.");
+    }
   }
 
   const byNiche = sets.reduce<Record<string, SetRow[]>>((acc, s) => {
@@ -153,7 +159,7 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
           </Button>
         </div>
         <p className="mt-1.5 text-[11px] text-[var(--muted)]">Autofill picks a topic you don&apos;t already have and fills the fields. A niche + topic that already exists is refused.</p>
-        {error && <p className="mt-1.5 text-xs text-[var(--critical)]">{error}</p>}
+        {error && <p role="alert" className="mt-1.5 text-xs text-[var(--critical)]">{error}</p>}
         {ideas.length > 0 && (
           <div className="mt-3 space-y-1.5">
             {ideas.map((s, i) => (
@@ -175,7 +181,7 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
               return (
                 <div key={id} className="border-b last:border-0">
                   <div className="flex items-center gap-3 px-4 py-3">
-                    <button onClick={() => toggleOpen(id)} className="text-[var(--muted)]">{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+                    <button type="button" onClick={() => toggleOpen(id)} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} questions in ${String(s.title)}`} className="text-[var(--muted)]">{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{String(s.title)}</p>
                       <p className="text-xs text-[var(--muted)]">{String(s.level)} · {Number(s.questionCount)} questions · {Number(s.attempts ?? 0)} attempts</p>
@@ -193,7 +199,7 @@ export function QuestionSetManager({ initial, embedded }: { initial: SetRow[]; e
                       <input type="checkbox" className="size-3.5 accent-[var(--primary)]" checked={Boolean(s.published)} onChange={(e) => setPublished(id, e.target.checked)} />
                       {s.published ? "live" : "hidden"}
                     </label>
-                    <button onClick={() => remove(id)} className="grid size-8 place-items-center rounded-[8px] text-[var(--muted)] hover:text-[var(--critical)]"><Trash2 size={14} /></button>
+                    <button type="button" onClick={() => remove(id, String(s.title))} aria-label={`Delete ${String(s.title)}`} className="grid size-8 place-items-center rounded-[8px] text-[var(--muted)] hover:text-[var(--critical)]"><Trash2 size={14} /></button>
                   </div>
                   {open && (
                     <div className="space-y-3 border-t bg-[var(--surface-elevated)] px-4 py-3">
